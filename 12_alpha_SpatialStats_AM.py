@@ -1,10 +1,13 @@
+# %%
 import numpy as np
 import xarray as xr
+import dask.array as da
 import os,glob,sys
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
-import matplotlib.ticker as mticker
+import matplotlib.ticker as mticker 
+from matplotlib.ticker import LogLocator, AutoMinorLocator
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import matplotlib.patheffects as pe
@@ -16,9 +19,12 @@ import pandas as pd
 from typing import Tuple, Dict, Optional
 from scipy import stats
 import rasterio
-
+from pathlib import Path
 
 """
+This is an introduction to the high wind speeds, as such, the first plot is the distribution of
+the full timeseries of wind speeds for each model. 
+
 Code to compute and map the spatial statitistics of the Annual Maximas for each CPM member.
 Statitsitcs such as: Correlation coefficient, Average, standard deviaiton and correlation 
 coefficient.
@@ -26,26 +32,25 @@ coefficient.
 It also computes and visualizes the monthly correlation of the monthly maxima based on the
 Pearson correlation coefficient. 
 
-This is an introduction to the high wind speeds. 
-
 Author : Nathalia Correa-Sánchez
 """
+# %%
 
 ########################################################################################
 ##-------------------------------DEFINING IMPORTANT PATHS-----------------------------##
 ########################################################################################
-
-bd_in_ws       = "/Dati/Data/WS_CORDEXFPS/"
-bd_out_fig     = "/Dati/Outputs/Plots/WP3_development/"
-bd_out_am      = "/Dati/Outputs/AM_ws100m/"
+STORAGE        = Path("/mnt/smb").as_posix()
+bd_in_ws       = STORAGE + "/Data/WS_CORDEXFPS/"
+bd_out_fig     = "/home/nathalia/Outputs/Plots/WP3_development" # Por ahora en la maquina virtual de procesamiento
+bd_out_am      = STORAGE + "/Outputs/AM_ws100m/"
 bd_in_eth      = bd_in_ws + "ETH/wsa100m_crop/"
 bd_in_cmcc     = bd_in_ws + "CMCC/wsa100m_crop/"
 bd_in_cnrm     = bd_in_ws + "CNRM/wsa100m_crop/"
-bd_out_tc      = "/Dati/Outputs/WP3_SamplingSeries_CPM/"
-bd_in_rast     = "/Dati/Outputs/Climate_Provinces/Development_Rasters/FinalRasters_In-Out/"
-bd_base_raster = "/Dati/Outputs/Climate_Provinces/Development_Rasters/ALP3_ETOPO2022_60sArc.tif"
+bd_out_tc      = STORAGE + "/Outputs/WP3_SamplingSeries_CPM/"
+bd_in_rast     = STORAGE + "/Outputs/Climate_Provinces/Development_Rasters/FinalRasters_In-Out/"
+bd_base_raster = STORAGE + "/Outputs/Climate_Provinces/Development_Rasters/ALP3_ETOPO2022_60sArc.tif"
 
-
+# %%
 ########################################################################################
 ##------------------------------DEFINNING RELEVANT INPUTS-----------------------------##
 ########################################################################################
@@ -53,6 +58,7 @@ bd_base_raster = "/Dati/Outputs/Climate_Provinces/Development_Rasters/ALP3_ETOPO
 filas_eliminar    = [0]  # Primera  fila, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada 
 columnas_eliminar = [0]  # Primera columna, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada
 
+# %%
 ########################################################################################
 ### ---------------------------DEFINNING RELEVANT FUNCTIONS--------------------------###
 ########################################################################################
@@ -104,7 +110,6 @@ def calcular_maximos_anuales(ds, var_name='wsa100m'):
     ds_max_anual = xr.concat(max_vals, dim=pd.DatetimeIndex(times, name='time'))
     
     return ds_max_anual
-
 
 def calcular_correlaciones_espaciales(da_eth, da_cnrm, da_cmcc):
     """
@@ -160,7 +165,6 @@ def calcular_promedio_maximos_anuales(da_eth, da_cnrm, da_cmcc):
     
     return avg_eth, avg_cnrm, avg_cmcc
 
-
 def calcular_std_maximos_anuales(da_eth, da_cnrm, da_cmcc):
     """
     Calcula la desviación estándar de los máximos anuales para cada modelo en cada píxel.
@@ -183,7 +187,6 @@ def calcular_std_maximos_anuales(da_eth, da_cnrm, da_cmcc):
     print("Cálculo de desviaciones estándar completado!")
     
     return std_eth, std_cnrm, std_cmcc
-
 
 def calcular_cv_maximos_anuales(da_eth, da_cnrm, da_cmcc):
     """
@@ -286,19 +289,94 @@ def add_elevation_legend(fig, contour_levels, pos, colour_lines):
     
     legend = cax.legend( handles=legend_elements, loc='center', ncol=len(contour_levels),frameon=True, framealpha=0.8, facecolor='#F0F0F0', title='Elevation Contours', title_fontsize=14.5, fontsize=14.5 )    
     return cax
-
+# %%
 ##########################################################################################
-###----------------LECTRURA DE ARCHIVOS Y PROCESAMIENTO DE MAXIMOS ANUALES ------------###
+###-----------------------------LECTRURA DE ARCHIVOS-----------------------------------###
 ##########################################################################################
 
 ds_eth  = load_ds(bd_in_eth)
 ds_cnrm = load_ds(bd_in_cnrm)
 ds_cmcc = load_ds(bd_in_cmcc)
 
+# %%
+##########################################################################################
+###---------------GENERACION DE LAS DISTRIBUCIONES DEL FULL TIMESERIES-----------------###
+##########################################################################################
+
+# Define bins
+bins = np.linspace(0, 40, 81)
+
+# Compute histograms using dask (more efficient for large data)
+print("Computing Histograms...")
+hist_eth, _  = da.histogram(ds_eth.wsa100m.data.flatten(), bins=bins, density=True)
+hist_cnrm, _ = da.histogram(ds_cnrm.wsa100m.data.flatten(), bins=bins, density=True)
+hist_cmcc, _ = da.histogram(ds_cmcc.wsa100m.data.flatten(), bins=bins, density=True)
+
+# Compute (this triggers the dask computation)
+hist_eth  = hist_eth.compute()
+hist_cnrm = hist_cnrm.compute()
+hist_cmcc = hist_cmcc.compute()
+
+bin_centers = (bins[:-1] + bins[1:]) / 2
+
+# For CDF, compute percentiles instead of full sort (more efficient)
+print("Computing percentiles for CDF...")
+percentiles    = np.linspace(0, 100, 1001)  # 0.1% resolution
+quantiles_eth  = da.percentile(ds_eth.wsa100m.data.flatten(), percentiles).compute()
+quantiles_cnrm = da.percentile(ds_cnrm.wsa100m.data.flatten(), percentiles).compute()
+quantiles_cmcc = da.percentile(ds_cmcc.wsa100m.data.flatten(), percentiles).compute()
+cdf_values     = percentiles / 100
+
+# %%
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
+# Plot PDF
+ax1.plot(bin_centers, hist_eth, linewidth=2.5, color='#edae49', label='ETH', alpha=0.9)
+ax1.plot(bin_centers, hist_cnrm, linewidth=2.5, color='#00798c', label='CNRM', alpha=0.9)
+ax1.plot(bin_centers, hist_cmcc, linewidth=2.5, color='#d1495b', label='CMCC', alpha=0.9)
+ax1.fill_between(bin_centers, hist_eth, alpha=0.15, color='#edae49')
+ax1.fill_between(bin_centers, hist_cnrm, alpha=0.15, color='#00798c')
+ax1.fill_between(bin_centers, hist_cmcc, alpha=0.15, color='#d1495b')
+ax1.set_xlabel('Wind Speed at 100m (m/s)', fontsize=15, fontweight='bold')
+ax1.set_ylabel('Probability Density', fontsize=16, fontweight='bold')
+ax1.set_title('(a) PDF', fontsize=19, fontweight='bold')
+ax1.legend(fontsize=15)
+ax1.grid(True, linestyle='--', alpha=0.3)
+ax1.set_xlim(0, 40)
+
+# Plot CDF
+ax2.plot(quantiles_eth, cdf_values, linewidth=2.3, color='#edae49', label='ETH')
+ax2.plot(quantiles_cnrm, cdf_values, linewidth=2.3, color='#00798c', label='CNRM')
+ax2.plot(quantiles_cmcc, cdf_values, linewidth=2.3, color='#d1495b', label='CMCC')
+ax2.set_xlabel('Wind Speed at 100m (m/s)', fontsize=16, fontweight='bold')
+ax2.set_ylabel('Cumulative Probability', fontsize=16, fontweight='bold')
+ax2.set_title('(b) CDF', fontsize=19, fontweight='bold')
+ax2.legend(fontsize=15)
+ax2.grid(True, linestyle='--', alpha=0.3)
+ax2.set_xlim(0, 40)
+ax2.set_ylim(0, 1)
+
+for i, ax in enumerate([ax1, ax2]):
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False) 
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.tick_params(which='both', direction='in', labelsize=15)
+    
+
+# plt.suptitle('Full Hourly Time Series Distributions (10 years)', fontsize=20, fontweight='bold')
+plt.tight_layout()
+plt.savefig(bd_out_fig+'PDF_CDF_FullTimeSeries.png', dpi=300, bbox_inches='tight', transparent=True)
+plt.show()
+
+
+# %%
+##########################################################################################
+###--------------------------PROCESAMIENTO DE MAXIMOS ANUALES -------------------------###
+##########################################################################################
+
 max_anual_eth  = calcular_maximos_anuales(ds_eth)
 max_anual_cmcc = calcular_maximos_anuales(ds_cmcc)
 max_anual_cnrm = calcular_maximos_anuales(ds_cnrm)
-
+# %%
 ##########################################################################################
 ###---------------------CORRELACIONES ESPACIALES DE MÁXIMOS ANUALES--------------------###
 ##########################################################################################

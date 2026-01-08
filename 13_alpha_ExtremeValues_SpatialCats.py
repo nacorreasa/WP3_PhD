@@ -1048,7 +1048,6 @@ roughness_counts = roughness_counts.fillna(0)
 slope_counts     = slope_counts.fillna(0)
 
 
-
 ##############################################################################################
 ###----APPLING BOOSTRAP-CI TO THE MEAN RETURN LEVELS OF THE ENSEMBLE PER SPATIAL CATEGORIES---###
 ##############################################################################################

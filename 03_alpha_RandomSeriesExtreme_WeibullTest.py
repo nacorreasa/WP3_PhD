@@ -1,3 +1,5 @@
+
+# %%
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -27,7 +29,7 @@ namiento porque no hay observaicoens reales de los annual maxima.
 
 Author : Nathalia Correa-Sánchez
 """
-
+# %%
 #############################################################################
 ##-------------------------DEFINING IMPORTANT PATHS------------------------##
 #############################################################################

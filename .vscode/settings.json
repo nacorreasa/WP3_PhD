@@ -1,0 +1,4 @@
+{
+    "python.defaultInterpreterPath": "/home/nathalia/miniforge3/envs/clima/bin/python",
+    "jupyter.jupyterServerType": "local"
+}
