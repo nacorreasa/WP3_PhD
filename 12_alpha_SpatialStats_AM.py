@@ -157,7 +157,7 @@ def calcular_promedio_maximos_anuales(da_eth, da_cnrm, da_cmcc):
     print("Calculando promedio de máximos anuales...")
     
     # Cálculo directo usando xarray para vectorizar operaciones
-    avg_eth = da_eth.mean(dim='time')
+    avg_eth  = da_eth.mean(dim='time')
     avg_cnrm = da_cnrm.mean(dim='time')
     avg_cmcc = da_cmcc.mean(dim='time')
     
@@ -319,13 +319,65 @@ hist_cmcc = hist_cmcc.compute()
 
 bin_centers = (bins[:-1] + bins[1:]) / 2
 
-# For CDF, compute percentiles instead of full sort (more efficient)
+data_eth_flat  = ds_eth.wsa100m.data.flatten()
+data_cnrm_flat = ds_cnrm.wsa100m.data.flatten()
+data_cmcc_flat = ds_cmcc.wsa100m.data.flatten()
+
+# For CDF, compute percentiles instead of full sort 
 print("Computing percentiles for CDF...")
 percentiles    = np.linspace(0, 100, 1001)  # 0.1% resolution
-quantiles_eth  = da.percentile(ds_eth.wsa100m.data.flatten(), percentiles).compute()
-quantiles_cnrm = da.percentile(ds_cnrm.wsa100m.data.flatten(), percentiles).compute()
-quantiles_cmcc = da.percentile(ds_cmcc.wsa100m.data.flatten(), percentiles).compute()
+quantiles_eth  = da.percentile(data_eth_flat, percentiles).compute()
+quantiles_cnrm = da.percentile(data_cnrm_flat, percentiles).compute()
+quantiles_cmcc = da.percentile(data_cmcc_flat, percentiles).compute()
 cdf_values     = percentiles / 100
+# %%
+# Computting the overall statistics
+
+print("Computing statistics...")
+
+stats = {}
+
+# Procesar cada modelo UNO A LA VEZ
+for name, data_flat in [('ETH', data_eth_flat), 
+                        ('CNRM', data_cnrm_flat), 
+                        ('CMCC', data_cmcc_flat)]:
+    print(f"\n  Processing {name}...")
+    
+    # Usar operaciones de DASK (no numpy)
+    print(f"    Computing mean...")
+    mean_val = float(da.mean(data_flat).compute())
+    
+    print(f"    Computing std...")
+    std_val = float(da.std(data_flat).compute())
+    
+    print(f"    Computing percentiles...")
+    # Calcular todos los percentiles en UNA sola llamada (más eficiente)
+    percentiles_vals = da.percentile(data_flat, [50, 95, 99]).compute()
+    
+    stats[name] = {
+        'mean': mean_val,
+        'std': std_val,
+        'p50': percentiles_vals[0],
+        'p95': percentiles_vals[1],
+        'p99': percentiles_vals[2]
+    }
+    
+    print(f"    {name} done: mean={mean_val:.2f}, std={std_val:.2f}")
+
+print("\nAll statistics computed!")
+
+# Formatear texto
+stats_text = (
+    f"           Mean    Std     p50     p95     p99\n"
+    f"ETH:    {stats['ETH']['mean']:6.2f}  {stats['ETH']['std']:5.2f}  "
+    f"{stats['ETH']['p50']:6.2f}  {stats['ETH']['p95']:6.2f}  {stats['ETH']['p99']:6.2f}\n"
+    f"CNRM:   {stats['CNRM']['mean']:6.2f}  {stats['CNRM']['std']:5.2f}  "
+    f"{stats['CNRM']['p50']:6.2f}  {stats['CNRM']['p95']:6.2f}  {stats['CNRM']['p99']:6.2f}\n"
+    f"CMCC:   {stats['CMCC']['mean']:6.2f}  {stats['CMCC']['std']:5.2f}  "
+    f"{stats['CMCC']['p50']:6.2f}  {stats['CMCC']['p95']:6.2f}  {stats['CMCC']['p99']:6.2f}"
+)
+
+print("\n" + stats_text)
 
 # %%
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
@@ -336,6 +388,8 @@ ax1.plot(bin_centers, hist_cmcc, linewidth=2.5, color='#d1495b', label='CMCC', a
 ax1.fill_between(bin_centers, hist_eth, alpha=0.15, color='#edae49')
 ax1.fill_between(bin_centers, hist_cnrm, alpha=0.15, color='#00798c')
 ax1.fill_between(bin_centers, hist_cmcc, alpha=0.15, color='#d1495b')
+ax1.text(0.98, 0.97, stats_text, transform=ax1.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right',
+         fontfamily='monospace', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
 ax1.set_xlabel('Wind Speed at 100m (m/s)', fontsize=15, fontweight='bold')
 ax1.set_ylabel('Probability Density', fontsize=16, fontweight='bold')
 ax1.set_title('(a) PDF', fontsize=19, fontweight='bold')
@@ -361,12 +415,10 @@ for i, ax in enumerate([ax1, ax2]):
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     ax.tick_params(which='both', direction='in', labelsize=15)
     
-
 # plt.suptitle('Full Hourly Time Series Distributions (10 years)', fontsize=20, fontweight='bold')
 plt.tight_layout()
-plt.savefig(bd_out_fig+'PDF_CDF_FullTimeSeries.png', dpi=300, bbox_inches='tight', transparent=True)
+# plt.savefig(bd_out_fig+'PDF_CDF_FullTimeSeries.png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
-
 
 # %%
 ##########################################################################################
@@ -393,7 +445,7 @@ ds_corr = xr.Dataset(data_vars={'corr_eth_cnrm': corr_eth_cnrm,     # Correlaci�
 #########################################################################################
 ###-----VISUALIZING SPATIAL CORRELATION PATTERNS TRANFORMING THEM TO NUMPY 2D---------###
 #########################################################################################
-
+# %%
 corr_np_eth_cnrm  = corr_eth_cnrm.values
 corr_np_eth_cmcc  = corr_eth_cmcc.values
 corr_np_cnrm_cmcc = corr_cnrm_cmcc.values
@@ -452,9 +504,10 @@ cbar.ax.tick_params(labelsize=10)
 add_elevation_legend(fig, contour_levels, [0.25, 0.13, 0.5, 0.02], colour_lines)
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.05, hspace=0.10, left=0.05, right=0.9, bottom=0.10, top=0.90)
-plt.savefig(bd_out_fig+'SpatialCorr_AM.png', dpi=300, bbox_inches='tight', transparent=True)
+# plt.savefig(bd_out_fig+'SpatialCorr_AM.png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
+# %%
 ########################################################################################
 ##-----ABRIENDO EL CROPPED RASTER PARA EXTRAER CADA CLASE & AJUSTANDO EL DATAFRAME----##
 ########################################################################################
@@ -496,16 +549,21 @@ df_filt     = df_cats[df_cats.rel_freq >= p25]
 df_filt     = df_filt.reset_index(drop=True) ## Resetea el indice que se habia dañado luego del filtrado. 
 fl_cats     = df_filt['value'].values.astype(int)
 
-#########################################################################################
-###---------MONTHLY CORRELATION COEFFICIENT BASED ON THE SPATIAL CATEGORIES-----------###
-#########################################################################################
+# %%
+###########################################################################################################
+###---------MONTHLY CORRELATION COEFFICIENT OF MAXIMA AND P99 BASED ON THE SPATIAL CATEGORIES-----------###
+###########################################################################################################
 
 full_range = pd.date_range(start='2000-01-01 00:00:00', end='2009-12-31 23:50:00', freq='1H')
 
-# Inicializar diccionarios para almacenar correlaciones de máximos mensuales por categoría
+# Inicializar diccionarios para almacenar correlaciones de máximos y p99 mensuales por categoría
 monthly_max_corr_eth_cnrm  = {}
 monthly_max_corr_eth_cmcc  = {}
 monthly_max_corr_cnrm_cmcc = {}
+
+monthly_p99_corr_eth_cnrm  = {}
+monthly_p99_corr_eth_cmcc  = {}
+monthly_p99_corr_cnrm_cmcc = {}
 
 month_names = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
 
@@ -518,10 +576,11 @@ for cat in fl_cats:
     coordinates = data_npz['coordinates']
     models      = data_npz['models']
     
-    # Inicializar arrays para almacenar máximos mensuales para cada punto y modelo
+    # Inicializar arrays para almacenar máximos mensuales Y P99 para cada punto y modelo
     # Dimensiones: [punto, año, mes, modelo]
     # 10 años (2000-2009), 12 meses, 3 modelos
     monthly_maxima = np.zeros((len(coordinates), 10, 12, 3))
+    monthly_p99    = np.zeros((len(coordinates), 10, 12, 3))
     
     # Procesar cada punto
     for k in range(len(coordinates)):
@@ -533,7 +592,7 @@ for cat in fl_cats:
         df_s_cnrm = pd.DataFrame(serie_cnrm, index=full_range, columns=["WS_h"])
         df_s_cmcc = pd.DataFrame(serie_cmcc, index=full_range, columns=["WS_h"])
         
-        # Para cada año y mes, encontrar máximos
+        # Para cada año y mes, encontrar máximos y capcular p99 de todas las horas del mes
         for year_idx, year in enumerate(range(2000, 2010)):
             for month_idx, month in enumerate(range(1, 13)):
                 # Filtrar por año y mes
@@ -544,12 +603,19 @@ for cat in fl_cats:
                     monthly_maxima[k, year_idx, month_idx, 0] = df_s_eth.loc[mask, "WS_h"].max()
                     monthly_maxima[k, year_idx, month_idx, 1] = df_s_cnrm.loc[mask, "WS_h"].max()
                     monthly_maxima[k, year_idx, month_idx, 2] = df_s_cmcc.loc[mask, "WS_h"].max()
+
+                # Calcular p99 mensual (de TODAS las ~744 horas del mes)
+                if mask.any():
+                    monthly_p99[k, year_idx, month_idx, 0] = df_s_eth.loc[mask, "WS_h"].quantile(0.99)
+                    monthly_p99[k, year_idx, month_idx, 1] = df_s_cnrm.loc[mask, "WS_h"].quantile(0.99)
+                    monthly_p99[k, year_idx, month_idx, 2] = df_s_cmcc.loc[mask, "WS_h"].quantile(0.99)
     
+    ##########################----MONTHLY MAX----##########################
     # Calcular correlaciones por mes
     monthly_max_corr_eth_cnrm[cat]  = np.zeros(12)
     monthly_max_corr_eth_cmcc[cat]  = np.zeros(12)
     monthly_max_corr_cnrm_cmcc[cat] = np.zeros(12)
-    
+   
     # Para cada mes, calcular correlación de máximos a lo largo de los años
     for month_idx in range(12):
         # Para cada punto, calcular correlación y promediar
@@ -584,9 +650,51 @@ for cat in fl_cats:
         if point_corrs_cnrm_cmcc:
             monthly_max_corr_cnrm_cmcc[cat][month_idx] = np.mean(point_corrs_cnrm_cmcc)
 
-#########################################################################################
-###-------VISUALIZING THE CORRELATION OF EACH MONTH FOR EACH SPATIAL CATEGORY--------###
-#########################################################################################
+    ##########################----PERCENTILE 99----##########################
+    # Calcular correlaciones por mes
+    monthly_p99_corr_eth_cnrm[cat]  = np.zeros(12)
+    monthly_p99_corr_eth_cmcc[cat]  = np.zeros(12)
+    monthly_p99_corr_cnrm_cmcc[cat] = np.zeros(12)
+    
+    # Para cada mes, calcular correlación de p99 a lo largo de los años
+    for month_idx in range(12):
+        # Para cada punto, calcular correlación y promediar
+        point_corrs_eth_cnrm  = []
+        point_corrs_eth_cmcc  = []
+        point_corrs_cnrm_cmcc = []
+        
+        for k in range(len(coordinates)):
+            # Obtener p99 mensuales a lo largo de los años para este punto
+            eth_p99  = monthly_p99[k, :, month_idx, 0]  # 10 años
+            cnrm_p99 = monthly_p99[k, :, month_idx, 1]
+            cmcc_p99 = monthly_p99[k, :, month_idx, 2]
+            
+            # Calcular correlaciones si hay suficientes datos
+            if not np.isnan(eth_p99).any() and not np.isnan(cnrm_p99).any():
+                corr, _ = stats.pearsonr(eth_p99, cnrm_p99)
+                point_corrs_eth_cnrm.append(corr)
+            
+            if not np.isnan(eth_p99).any() and not np.isnan(cmcc_p99).any():
+                corr, _ = stats.pearsonr(eth_p99, cmcc_p99)
+                point_corrs_eth_cmcc.append(corr)
+            
+            if not np.isnan(cnrm_p99).any() and not np.isnan(cmcc_p99).any():
+                corr, _ = stats.pearsonr(cnrm_p99, cmcc_p99)
+                point_corrs_cnrm_cmcc.append(corr)
+        
+        # Calcular promedio de correlaciones para todos los puntos
+        if point_corrs_eth_cnrm:
+            monthly_p99_corr_eth_cnrm[cat][month_idx]  = np.mean(point_corrs_eth_cnrm)
+        if point_corrs_eth_cmcc:
+            monthly_p99_corr_eth_cmcc[cat][month_idx]  = np.mean(point_corrs_eth_cmcc)
+        if point_corrs_cnrm_cmcc:
+            monthly_p99_corr_cnrm_cmcc[cat][month_idx] = np.mean(point_corrs_cnrm_cmcc)
+
+print("Monthly p99 correlations computed for all categories")
+# %%
+################################################################################################
+###-----PREPARING THE PLOT OF THE CORRELATION OF EACH MONTH FOR EACH SPATIAL CATEGORY--------###
+################################################################################################
 
 color_eth_cnrm  = "#1f77b4"  # Azul
 color_eth_cmcc  = "#d62728"  # Rojo
@@ -613,6 +721,66 @@ for cat in fl_cats:
 
 months      = range(1, 13)
 month_names = {1: 'a)January', 2: 'b)February', 3: 'c)March', 4: 'd)April', 5: 'e)May', 6: 'f)June', 7: 'g)July', 8: 'h)August', 9: 'i)September', 10: 'j)October', 11: 'k)November', 12: 'l)December'}
+
+# %%
+################################################################################################
+###-----PLOTTING THE CORRELATION OF THE P99 FROM EACH MONTH FOR EACH SPATIAL CATEGORY--------###
+################################################################################################
+
+fig, axes = plt.subplots(4,3, figsize=(18, 16), sharex=False, sharey=True)
+axes      = axes.flatten()  
+# Iterar sobre cada mes
+for month_idx, month in enumerate(months):
+    ax = axes[month_idx]    
+    # Recopilar correlaciones para todas las categorías en este mes
+    cats_data = []    
+    for cat in fl_cats:
+        eth_cnrm_corr  = monthly_p99_corr_eth_cnrm[cat][month_idx]
+        eth_cmcc_corr  = monthly_p99_corr_eth_cmcc[cat][month_idx]
+        cnrm_cmcc_corr = monthly_p99_corr_cnrm_cmcc[cat][month_idx]
+        
+        # Calcular correlación promedio para esta categoría para ordenarlos de acuerdo a esto
+        avg_corr = np.mean([eth_cnrm_corr, eth_cmcc_corr, cnrm_cmcc_corr])        
+        cats_data.append({'cat'      : cat,
+                          'label'    : cat_labels[cat],
+                          'eth_cnrm' : eth_cnrm_corr,
+                          'eth_cmcc' : eth_cmcc_corr,
+                          'cnrm_cmcc': cnrm_cmcc_corr,
+                          'avg'      : avg_corr })
+    
+    # Ordenar categorías por correlación promedio (orden descendente)
+    cats_data.sort(key=lambda x: x['avg'], reverse=True)
+    x_pos      = np.arange(len(cats_data))
+    labels     = [item['label'] for item in cats_data]
+    markersize = 10
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.plot(x_pos, [item['eth_cnrm'] for item in cats_data], 'o', color=color_eth_cnrm, label='ETH-CNRM', alpha=0.7, markersize=markersize)
+    ax.plot(x_pos, [item['eth_cmcc'] for item in cats_data], 's', color=color_eth_cmcc, label='ETH-CMCC', alpha=0.7, markersize=markersize)
+    ax.plot(x_pos, [item['cnrm_cmcc'] for item in cats_data], '^', color=color_cnrm_cmcc, label='CNRM-CMCC', alpha=0.7, markersize=markersize)
+
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(labels, rotation=90, ha='center', fontsize=13.5)
+    ax.set_ylim(0, 1)
+    if month_idx in [0,3,6,9]:  # Solo para los gráficos de la izquierda
+        ax.set_ylabel('Pearson\nCorrelation (r)', fontsize=15)
+        ax.tick_params(axis='y', labelsize=14)  
+    ax.set_title(month_names[month], fontsize=15, fontweight='bold')
+    ax.grid(True, linestyle='--', alpha=0.3)
+    
+handles, labels = axes[-1].get_legend_handles_labels()
+fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=15.5, frameon=False, bbox_to_anchor=(0.5, 0.05),  bbox_transform=fig.transFigure)
+
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.20, hspace=0.63, left=0.07, right=0.98, bottom=0.15, top=0.90)
+# # fig.suptitle(f"Monthly maximum wind speed correlation by spatial category", fontsize=16, fontweight='bold', y=0.98)
+# plt.savefig(f"{bd_out_fig}Monthly_Correlation_P99_by_Category.png", dpi=300, bbox_inches='tight', transparent=True)
+plt.show()
+
+# %%
+###################################################################################################
+###-----PLOTTING THE CORRELATION OF THE MAXIMA FROM EACH MONTH FOR EACH SPATIAL CATEGORY--------###
+###################################################################################################
 
 fig, axes = plt.subplots(4,3, figsize=(18, 16), sharex=False, sharey=True)
 axes      = axes.flatten()  
@@ -661,10 +829,10 @@ fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=15.5, frameon=F
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.20, hspace=0.63, left=0.07, right=0.98, bottom=0.15, top=0.90)
 # # fig.suptitle(f"Monthly maximum wind speed correlation by spatial category", fontsize=16, fontweight='bold', y=0.98)
-plt.savefig(f"{bd_out_fig}Monthly_Correlation_by_Category.png", dpi=300, bbox_inches='tight', transparent=True)
+# plt.savefig(f"{bd_out_fig}Monthly_Correlation_Maxima_by_Category.png", dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
-
+# %%
 #########################################################################################
 ###------------VISUALIZING MONTHLY MAXIMA CORRELATION FOR SPATIAL CATEGORY------------###
 #########################################################################################
@@ -709,9 +877,10 @@ for ax_idx, (ax, title, monthly_corr) in enumerate(zip(axes, title_base, corr_da
 plt.tight_layout()
 fig.suptitle('Monthly Maximum Correlation Coefficient per Spatial Categories', fontsize=16, fontweight='bold', y=0.96)
 plt.subplots_adjust(wspace=0.13, hspace=0.21, left=0.11, right=0.95, bottom=0.15, top=0.85)
-plt.savefig(f"{bd_out_fig}Monthly_Maximum_Correlation_by_Category.png", dpi=300, bbox_inches='tight')
+# plt.savefig(f"{bd_out_fig}Monthly_Maximum_Correlation_by_Category.png", dpi=300, bbox_inches='tight')
 plt.show()
 
+# %%
 ##########################################################################################
 ###-------------------------DESCRIPTIVE STATISTICS OF THE ANNUAL MAXIMA----------------###
 ##########################################################################################
@@ -725,7 +894,7 @@ cv_eth, cv_cnrm, cv_cmcc = calcular_cv_maximos_anuales( max_anual_eth, max_anual
 # Calcular desviaciones estándar de máximos anuales
 std_eth, std_cnrm, std_cmcc = calcular_std_maximos_anuales(max_anual_eth, max_anual_cnrm, max_anual_cmcc)
 
-
+# %%
 ##########################################################################################
 ###-------------MAPPING SOME DESCRIPTIVE STATISTICS OF THE ANNUAL MAXIMA---------------###
 ##########################################################################################
@@ -826,7 +995,7 @@ for i, metrica_fila in enumerate(metricas_filas):
     fig.text(0.03, row_centers[i], titulos_metricas[i], va='center', ha='center', fontsize=14, fontweight='bold', rotation='vertical')
 add_elevation_legend(fig, contour_levels, [0.25, 0.15, 0.5, 0.02], colour_lines)
 # # fig.suptitle('Spatial Distribution of Annual Maximum Wind Speed Statistics', fontsize=16, fontweight='bold', y=0.83)
-plt.savefig(f"{bd_out_fig}Annual_Maximum_Statistics-AvgCV_Maps.png", format='png', dpi=300, bbox_inches='tight', transparent=True)
+# plt.savefig(f"{bd_out_fig}Annual_Maximum_Statistics-AvgCV_Maps.png", format='png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
 

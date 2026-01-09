@@ -48,7 +48,7 @@ bd_in_rast   = "/Dati/Outputs/Climate_Provinces/Development_Rasters/FinalRasters
 filas_eliminar    = [0]  # Primera  fila, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada 
 columnas_eliminar = [0]  # Primera columna, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada
 rp_idx            = 0    # CAMBIAR ESTE: OJOOOOOOOO Índice para el período de retorno !!!!! (VER LA LISTA DE LOS PERIODOS DE RETORNO)
-ret_per           = 2   # CAMBIAR ESTE: Valor para etiquetas
+ret_per           = 2    # CAMBIAR ESTE: Valor para etiquetas
 return_periods    = [2, 5, 10, 20, 50] # List of return periods 
 
 ########################################################################################
