@@ -417,8 +417,8 @@ gs  = gridspec.GridSpec(2, 3, height_ratios=[1, 1])
 ax1 = plt.subplot(gs[0, 0])
 sns.boxplot(x='Climate', y='Value', hue='Model', data=am_climate_df, palette=colors, order=climate_labels, ax=ax1,
             linewidth=1.5, fliersize=3)
-ax1.set_title('Climate', fontsize=14, fontweight='bold')
-ax1.set_ylabel('Annual Maxima [m s$^{-1}$]', fontsize=13, fontweight='bold')
+ax1.set_title('Climate', fontsize=15, fontweight='bold')
+ax1.set_ylabel('Annual Maxima [m s$^{-1}$]', fontsize=14, fontweight='bold')
 ax1.set_xlabel('')
 ax1.legend([], [], frameon=False)
 ax1.grid(axis='y', linestyle='--', alpha=0.3)
@@ -428,7 +428,7 @@ ax1.tick_params(labelsize=11)
 ax2 = plt.subplot(gs[0, 1])
 sns.boxplot(x='Roughness', y='Value', hue='Model', data=am_roughness_df, palette=colors, order=roughness_labels, ax=ax2,
             linewidth=1.5, fliersize=3)
-ax2.set_title('Roughness', fontsize=14, fontweight='bold')
+ax2.set_title('Roughness', fontsize=15, fontweight='bold')
 ax2.set_ylabel('')
 ax2.set_xlabel('')
 ax2.legend([], [], frameon=False)
@@ -439,7 +439,7 @@ ax2.tick_params(labelsize=11)
 ax3 = plt.subplot(gs[0, 2])
 sns.boxplot(x='Topography', y='Value', hue='Model', data=am_topography_df, palette=colors, order=topography_labels, ax=ax3,
             linewidth=1.5, fliersize=3)
-ax3.set_title('Topography', fontsize=14, fontweight='bold')
+ax3.set_title('Topography', fontsize=15, fontweight='bold')
 ax3.set_ylabel('')
 ax3.set_xlabel('')
 ax3.legend([], [], frameon=False)
@@ -459,8 +459,8 @@ for ax in [ax1, ax2, ax3]:
 ax4 = plt.subplot(gs[1, 0])
 sns.boxplot(x='Climate', y='Value', hue='Model', data=cv_climate_df, palette=colors, order=climate_labels, ax=ax4,
             linewidth=1.5, fliersize=3)
-ax4.set_ylabel('Coefficient of Variation', fontsize=13, fontweight='bold')
-ax4.set_xlabel('Climate level', fontsize=13)
+ax4.set_ylabel('Coefficient of Variation', fontsize=14, fontweight='bold')
+ax4.set_xlabel('Climate level', fontsize=14)
 ax4.legend([], [], frameon=False)
 ax4.grid(axis='y', linestyle='--', alpha=0.3)
 ax4.tick_params(labelsize=11)
@@ -470,7 +470,7 @@ ax5 = plt.subplot(gs[1, 1])
 sns.boxplot(x='Roughness', y='Value', hue='Model', data=cv_roughness_df, palette=colors, order=roughness_labels, ax=ax5,
             linewidth=1.5, fliersize=3)
 ax5.set_ylabel('')
-ax5.set_xlabel('Roughness level', fontsize=13)
+ax5.set_xlabel('Roughness level', fontsize=14)
 ax5.legend([], [], frameon=False)
 ax5.grid(axis='y', linestyle='--', alpha=0.3)
 ax5.tick_params(labelsize=11)
@@ -480,7 +480,7 @@ ax6 = plt.subplot(gs[1, 2])
 sns.boxplot(x='Topography', y='Value', hue='Model', data=cv_topography_df, palette=colors, order=topography_labels, ax=ax6,
             linewidth=1.5, fliersize=3)
 ax6.set_ylabel('')
-ax6.set_xlabel('Topography level', fontsize=13)
+ax6.set_xlabel('Topography level', fontsize=14)
 ax6.legend([], [], frameon=False)
 ax6.grid(axis='y', linestyle='--', alpha=0.3)
 ax6.tick_params(labelsize=11)
@@ -508,11 +508,11 @@ for ax in [ax2, ax3, ax5, ax6]:
 
 # Global legend
 legend_handles = [Patch(color=color, label=model) for model, color in colors.items()]
-fig.legend(legend_handles, list(colors.keys()), loc='upper center', bbox_to_anchor=(0.5, 0.5), ncol=3, fontsize=13, frameon=False)
+fig.legend(legend_handles, list(colors.keys()), loc='upper center', bbox_to_anchor=(0.5, 0.5), ncol=3, fontsize=14, frameon=False)
 
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.08, hspace=0.20, top=0.96, bottom=0.05)
-# plt.savefig(bd_out_fig + '/AnnualMaxima_CV_Boxplots_FromMaps_FINAL.png',  dpi=300, bbox_inches='tight')
+plt.savefig(bd_out_fig + '/AnnualMaxima_CV_Boxplots_FromMaps.png',  dpi=300, bbox_inches='tight')
 # print(f"\nFigure saved to: {bd_out_fig}/AnnualMaxima_CV_Boxplots_FromMaps_FINAL.png")
 plt.show()
 
@@ -742,8 +742,8 @@ print("ANALYSIS COMPLETE!")
 # # # # ax1 = plt.subplot(gs[0, 0])
 # # # # sns.boxplot(x='Climate', y='Value', hue='Model', data=am_climate_df, palette=colors, order=climate_labels, ax=ax1,
 # # # #             linewidth=1.5, fliersize=3)
-# # # # ax1.set_title('Climate', fontsize=14, fontweight='bold')
-# # # # ax1.set_ylabel('Annual Maxima [m s$^{-1}$]', fontsize=13, fontweight='bold')
+# # # # ax1.set_title('Climate', fontsize=15, fontweight='bold')
+# # # # ax1.set_ylabel('Annual Maxima [m s$^{-1}$]', fontsize=14, fontweight='bold')
 # # # # ax1.set_xlabel('')
 # # # # ax1.legend([], [], frameon=False)
 # # # # ax1.grid(axis='y', linestyle='--', alpha=0.3)
@@ -853,3 +853,4 @@ print("ANALYSIS COMPLETE!")
 
 
 # # # # # %%
+# %%
