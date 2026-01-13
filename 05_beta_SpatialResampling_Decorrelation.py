@@ -1,9 +1,9 @@
-
+ # %%
 import xarray as xr
 import numpy as np
 import pandas as pd
 import glob, os
-from numba import njit
+# from numba import njit
 from scipy import interpolate
 from scipy.interpolate import UnivariateSpline
 import dask as da
@@ -13,6 +13,8 @@ from matplotlib.ticker import LogLocator, AutoMinorLocator, MaxNLocator
 from matplotlib.gridspec import GridSpec
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+from pathlib import Path
+
 
 """
 Code to compute a spatial resampling of the three CPMs, create ensemble mean,
@@ -20,17 +22,19 @@ and calculate temporal decorrelation. Finally it produces a map of the results.
 
 Author : Nathalia Correa-Sánchez
 """
-
+ # %%
 #############################################################################
 ##-------------------------DEFINING IMPORTANT PATHS------------------------##
 #############################################################################
-bd_in_ws   = "/Dati/Data/WS_CORDEXFPS/"
-bd_out_ese = "/Dati/Data/WS_CORDEXFPS/Ensemble_Mean/wsa100m_SpatRes_Temporal/"
-bd_in_eth  = bd_in_ws + "ETH/wsa100m_crop/"
-bd_in_cmcc = bd_in_ws + "CMCC/wsa100m_crop/"
-bd_in_cnrm = bd_in_ws + "CNRM/wsa100m_crop/"
-bd_out_fig = "/Dati/Outputs/Plots/WP3_development/"
+STORAGE        = Path("/mnt/smb").as_posix()
+bd_in_ws       = STORAGE + "/Data/WS_CORDEXFPS/"
+bd_out_fig     = "/home/nathalia/Outputs/Plots/WP3_development" # Por ahora en la maquina virtual de procesamiento
+bd_out_ese     = STORAGE + "Data/WS_CORDEXFPS/Ensemble_Mean/wsa100m_SpatRes_Temporal/"
+bd_in_eth      = bd_in_ws + "ETH/wsa100m_crop/"
+bd_in_cmcc     = bd_in_ws + "CMCC/wsa100m_crop/"
+bd_in_cnrm     = bd_in_ws + "CNRM/wsa100m_crop/"
 
+ # %%
 #############################################################################
 ##------------------------DEFINING INPUT PARAMETERS------------------------##
 #############################################################################
@@ -153,9 +157,13 @@ def fill_nans_with_neighborhood_mean(array):
                         array_filled[t,i,j] = np.mean(valid_neighbors)
     return array_filled
 
-@njit
+# # @njit
 def crosscorr(a, b, lag):
-    """Numba-accelerated cross-correlation function"""
+    """Numba-accelerated cross-correlation function
+
+    Calculate the Pearson correlation coefficient matrix (already normalised).
+    
+    """
     return np.corrcoef(a[:-lag], b[lag:])[0, 1]
 
 def calculate_temporal_decorrelation(pixel_series, lags):
@@ -170,7 +178,33 @@ def calculate_temporal_decorrelation(pixel_series, lags):
     rs_spline = spline(lags)
     
     # Compute integral (temporal decorrelation)
-    return np.trapz(rs_spline, lags)
+    return np.trapezoid(rs_spline, lags)
+
+def computing_decorrelation_per_array(wsa100m_array):
+    """
+    Function to compute the decorrelation time in a 3D numpy array grid.
+    
+    INPUTS:
+     - wsa100m_array: 3D numpy array grid the time series in a grid
+    """
+    tau_dec = np.zeros((wsa100m_array.shape[1], wsa100m_array.shape[2]), dtype=np.float32)
+    
+    # Definir rango de lags
+    lags = np.arange(1, 201, 1)
+
+    # Iterar sobre latitudes y longitudes
+    for lat_idx in range(wsa100m_array.shape[1]):
+        for lon_idx in range(wsa100m_array.shape[2]):
+            # Extraer la serie temporal para un píxel específico
+            pixel_series = wsa100m_array[:, lat_idx, lon_idx]
+            
+            # Calcular el tiempo de decorrelación
+            tau_dec[lat_idx, lon_idx] = calculate_temporal_decorrelation(pixel_series, lags)
+        print(lat_idx)
+   
+    tau_dec_meanlon = np.mean(tau_dec, axis=1)
+
+    return tau_dec, tau_dec_meanlon
 
 def style_axis(ax):
     """
@@ -181,18 +215,31 @@ def style_axis(ax):
     ax.tick_params(which='both', direction='in')
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.yaxis.set_minor_locator(AutoMinorLocator())
+# %%
+##########################################################################################
+###-----------------------------LECTRURA DE ARCHIVOS-----------------------------------###
+##########################################################################################
 
-#############################################################################
-##----------------PROCESSING CPMS TO CREATE ENSEMBLE MEAN------------------##
-#############################################################################
+ds_eth  = load_ds(bd_in_eth)
+ds_cnrm = load_ds(bd_in_cnrm)
+ds_cmcc = load_ds(bd_in_cmcc)
 
-# Define CPM paths
-cpm_paths = {
-    'ETH': bd_in_eth,
-    'CMCC': bd_in_cmcc,
-    'CNRM': bd_in_cnrm
-}
+# %%
+##########################################################################################
+###------------AJUSTE A LOS DS PARA QUE TENGAN EL MIMO RANGO TEMPORAL------------------###
+##########################################################################################
 
+# Asegurar que todos los datasets comiencen desde 2000-01-01 01:00:00
+ds_eth  = ds_eth.sel(time=slice('2000-01-01 01:00:00', None))
+ds_cmcc = ds_cmcc.sel(time=slice('2000-01-01 01:00:00', None))
+
+# Asegurar que todos los datasets terminen el 2009-12-31 23:00:00
+ds_cnrm = ds_cnrm.sel(time=slice(None, '2009-12-31 23:00:00'))
+
+# %%
+################################################################################
+###----------------CREATING THE TARGET GRID IN EACH CPM----------------------###
+################################################################################
 # Get target grid from first available dataset (ETH)
 print("Determining target grid...")
 with xr.open_dataset(sorted(glob.glob(f"{bd_in_eth}*.nc"))[0]) as ds:
@@ -200,47 +247,49 @@ with xr.open_dataset(sorted(glob.glob(f"{bd_in_eth}*.nc"))[0]) as ds:
 
 print(f"Target grid: {len(target_lats)} lats x {len(target_lons)} lons")
 
-# Process CPMs and create ensemble mean
-result_ds = process_multiple_cpms_to_ensemble(cpm_paths, target_lats, target_lons)
+# Interpolate all datasets to target grid
+print("Interpolating to target grid...")
+ds_eth_target  = ds_eth.sel(lat=target_lats, lon=target_lons, method='nearest')
+ds_cmcc_target = ds_cmcc.sel(lat=target_lats, lon=target_lons, method='nearest')
+ds_cnrm_target = ds_cnrm.sel(lat=target_lats, lon=target_lons, method='nearest')
 
-print("Processing completed!")
+# Ensure all datasets have the same time dimension (Intersection). To complement the DQ done before. 
+print("Aligning time dimensions...")
+common_times = np.intersect1d(np.intersect1d(ds_eth_target.time.values, ds_cmcc_target.time.values), ds_cnrm_target.time.values)
 
+ds_eth_aligned  = ds_eth_target.sel(time=common_times)
+ds_cmcc_aligned = ds_cmcc_target.sel(time=common_times)
+ds_cnrm_aligned = ds_cnrm_target.sel(time=common_times)
+
+# %%
 #############################################################################
-##------------CORRECTING SPURIOUS NANs IN THE RESULTING ARRAY--------------##
+##-------------------SHAPPING THE ARRAYS FOR EACH CPM----------------------##
+#############################################################################
+eth_100m_array  = ds_eth_aligned.wsa100m.values
+cnrm_100m_array = ds_cnrm_aligned.wsa100m.values
+cmcc_100m_array = ds_cmcc_aligned.wsa100m.values
+
+lat_array   = ds_eth_aligned.lat.values
+lon_array  = ds_eth_aligned.lon.values
+# %%
+#############################################################################
+##-------------COMPUTING TEMPORAL DECORRELATION FOR EACH CPM---------------##
 #############################################################################
 
-wsa100m_array = result_ds.wsa100m.values
-lat_array     = result_ds.lat.values
-lon_array     = result_ds.lon.values
+tau_dec_eth, tau_dec_meanlon_eth   = computing_decorrelation_per_array(eth_100m_array)
+tau_dec_cnrm, tau_dec_meanlon_cnrm = computing_decorrelation_per_array(cnrm_100m_array)
+tau_dec_cmcc, tau_dec_meanlon_cmcc = computing_decorrelation_per_array(cmcc_100m_array)
 
-print(f"Original NaNs: {np.isnan(wsa100m_array).sum()}")
-wsa100m_array_filled = fill_nans_with_neighborhood_mean(wsa100m_array)
-print(f"Remaining NaNs after filling: {np.isnan(wsa100m_array_filled).sum()}")
+print("MinDec ETH:"+str(tau_dec_eth.min()))
+print("MaxDec ETH:"+str(tau_dec_eth.max()))
 
-#############################################################################
-##-------------------COMPUTING TEMPORAL DECORRELATION----------------------##
-#############################################################################
+print("MinDec CNRM:"+str(tau_dec_cnrm.min()))
+print("MaxDec CNRM:"+str(tau_dec_cnrm.max()))
 
-tau_dec       = np.zeros((wsa100m_array_filled.shape[1], wsa100m_array_filled.shape[2]), dtype=np.float32)
-  
-# Definir rango de lags
-lags = np.arange(1, 201, 1)
+print("MinDec CMCC:"+str(tau_dec_cmcc.min()))
+print("MaxDec CMCC:"+str(tau_dec_cmcc.max()))
 
-# Iterar sobre latitudes y longitudes
-for lat_idx in range(wsa100m_array_filled.shape[1]):
-    for lon_idx in range(wsa100m_array_filled.shape[2]):
-        # Extraer la serie temporal para un píxel específico
-        pixel_series = wsa100m_array_filled[:, lat_idx, lon_idx]
-        
-        # Calcular el tiempo de decorrelación
-        tau_dec[lat_idx, lon_idx] = calculate_temporal_decorrelation(pixel_series, lags)
-
-    print(lat_idx)
-
-print("MinDec:"+str(tau_dec.min()))
-print("MaxDec:"+str(tau_dec.max()))
-
-tau_dec_meanlon = np.mean(tau_dec, axis=1)
+# %%
 #############################################################################
 ##----------------------MAPPING DECORRELATION VALUES-----------------------##
 #############################################################################
@@ -251,19 +300,23 @@ gs  = GridSpec(1, 2, width_ratios=[1, 3.5], height_ratios=[1], figure=fig)
 
 ax1 = fig.add_subplot(gs[0])
 style_axis(ax1)
-ax1.plot(tau_dec_meanlon, lat_array, '-k', linewidth=2.5)
+ax1.plot(tau_dec_meanlon_eth, lat_array, '#edae49', linewidth=2.5, label = "ETH")
+ax1.plot(tau_dec_meanlon_cnrm, lat_array, '#00798c', linewidth=2.5, label = "CNRM")
+ax1.plot(tau_dec_meanlon_cmcc, lat_array, '#d1495b', linewidth=2.5, label = "CMCC")
 ax1.set_ylabel('Latitude [°N]', fontsize=13.5)
 ax1.set_xlabel('Mean Decorrelation [h]', fontsize=13.5)
 ax1.set_title("a) Mean decorrelation profile", fontsize=14, fontweight="bold")
 ax1.grid(True, axis='y', linestyle='--', alpha=0.3)
 ax1.set_ylim([lat_array.min(), lat_array.max()])
-ax1.set_xlim([tau_dec_meanlon.min() - 2, tau_dec_meanlon.max() + 2])
+ax1.set_xlim([tau_dec_meanlon_cmcc.min() - 2, tau_dec_meanlon_eth.max() + 2])
 ax1.tick_params(labelsize=13)
+ax1.legend(fontsize=13)
 
 # Subplot 2: Spatial distribution map 
 ax2                = fig.add_subplot(gs[1], projection=ccrs.PlateCarree())
 lon_mesh, lat_mesh = np.meshgrid(lon_array, lat_array)
-scatter            = ax2.scatter( lon_mesh.flatten(), lat_mesh.flatten(), c=tau_dec.flatten(), transform=ccrs.PlateCarree(), cmap="viridis", s=100 )
+scatter            = ax2.scatter(lon_mesh.flatten(), lat_mesh.flatten(), marker='X', color='k', transform=ccrs.PlateCarree(), s=100,                   # Tamaño
+                     linewidths=2, edgecolors='k')
 ax2.add_feature(cfeature.BORDERS, linestyle=":", edgecolor="black", linewidth=0.8)
 ax2.add_feature(cfeature.COASTLINE, linewidth=1.0, edgecolor="black")
 gl = ax2.gridlines(draw_labels=True, alpha=0.3, linestyle="--")
@@ -290,5 +343,8 @@ plt.subplots_adjust(wspace=0.05)
 plt.tight_layout()
 
 plt.subplots_adjust(wspace=0.08, left=0.08, right=0.95, top=0.92, bottom=0.12)
-# plt.savefig(bd_out_fig + "MapDecorrelation_MultiCPM.png", format='png', dpi=300, bbox_inches='tight', transparent=True)
+plt.savefig(bd_out_fig + "MapDecorrelation_SingleMember.png", format='png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
+
+
+# %%
