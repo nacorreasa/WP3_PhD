@@ -20,6 +20,7 @@ from scipy import integrate
 from scipy.stats import gumbel_r
 import random
 import rasterio
+from pathlib import Path
 
 """
 Codigo para conducir los Weibull Tail Tests para la implementacion de SMEV. 
@@ -33,14 +34,16 @@ Author : Nathalia Correa-Sánchez
 #############################################################################
 ##-------------------------DEFINING IMPORTANT PATHS------------------------##
 #############################################################################
-bd_in_ws   = "/Dati/Data/WS_CORDEXFPS/"
-bd_out_fig = "/Dati/Outputs/Plots/WP3_development/"
-bd_out_tc  = "/Dati/Outputs/WP3_SamplingSeries_CPM/" 
-bd_in_rast = "/Dati/Outputs/Climate_Provinces/Development_Rasters/FinalRasters_In-Out/"  # Antes : Combined_RIX_remCPM_WGS84.tif
-bd_in_eth  = bd_in_ws + "ETH/wsa100m_crop/"
-bd_in_cmcc = bd_in_ws + "CMCC/wsa100m_crop/"
-bd_in_cnrm = bd_in_ws + "CNRM/wsa100m_crop/"
-
+STORAGE     = Path("/mnt/smb").as_posix()
+bd_in_ws    = STORAGE + "/Data/WS_CORDEXFPS/"
+bd_out_fig  = "/home/nathalia/Outputs/Plots/WP3_development" # Por ahora en la maquina virtual de procesamiento
+bd_out_am   = STORAGE + "/Outputs/AM_ws100m/"
+bd_in_eth   = bd_in_ws + "ETH/wsa100m_crop/"
+bd_in_cmcc  = bd_in_ws + "CMCC/wsa100m_crop/"
+bd_in_cnrm  = bd_in_ws + "CNRM/wsa100m_crop/"
+bd_out_tc   = STORAGE + "/Outputs/WP3_SamplingSeries_CPM/"
+bd_in_rast  = STORAGE + "/Outputs/Climate_Provinces/Development_Rasters/FinalRasters_In-Out/"
+# %%
 #############################################################################
 ##-------------------------DEFINNING RELEVANT INPUTS-----------------------##
 #############################################################################
@@ -63,6 +66,8 @@ colors   = [
             ]
 filas_eliminar    = [0]  # Primera  fila, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada 
 columnas_eliminar = [0]  # Primera columna, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada
+
+# %%
 #############################################################################
 ##------------------------DEFINING RELEVANT FUNCTIONS----------------------##
 #############################################################################
@@ -223,7 +228,6 @@ def separation_ws_events_max(s_arr, h_corr, dt_arr):
     
     return sep_events, idx_events
 
-
 def simple_mev_newsep(s_arr, dates, return_periods, threshold_measure, separation, durations, time_resolution, data_portion):
 
     # Convert dates to numpy datetime64 array
@@ -307,7 +311,6 @@ def select_unique_pixels(sample_arr, num_pixels):
     subset_arr = sample_arr[:, lat_indices, lon_indices]
     
     return subset_arr, lon_indices, lat_indices
-
 
 def plot_selected_pixels_map(lat_indices, lon_indices, lat_array, lon_array):
     """
@@ -405,7 +408,6 @@ def gpd_fit(data, threshold, return_periods, h_corr, dt_arr):
             list_sigma_ut.append(np.nan)
     
     return list_ut, list_sigma_ut
-
 
 def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percentages=[75, 80, 85], confidence_level=0.95, method = 'Trad', positive_x = False):
     """
@@ -996,7 +998,7 @@ def create_model_comparison_plots(results_by_model, bd_out_fig=""):
     if bd_out_fig:
         plt.savefig(f"{bd_out_fig}Model_Comparison_Parameters.png", dpi=300, bbox_inches='tight')
     plt.show()
-
+# %%
 ########################################################################################
 ##-----ABRIENDO EL CROPPED RASTER PARA EXTRAER CADA CLASE & AJUSTANDO EL DATAFRAME----##
 ########################################################################################
@@ -1039,6 +1041,7 @@ df_filt     = df_cats[df_cats.rel_freq >= p25]
 df_filt     = df_filt.reset_index(drop=True) ## Resetea el indice que se habia dñado luego del filtrado. 
 fl_cats     = df_filt['value'].values.astype(int)
 
+# %%
 #######################################################################################
 ##--------EXTRACTING SAMPLE OF PIXELS FROM SPATIAL CATEGORIES - BY MODEL ------------##
 #######################################################################################
@@ -1094,6 +1097,7 @@ print(f"CNRM subset_arr shape: {subset_arr_cnrm.shape}")
 print(f"CMCC subset_arr shape: {subset_arr_cmcc.shape}")
 print(f"Categories distribution: {set(categories_selected)}") # Debido a la selección aleatoria, no todas las categorias se incluyeron
 
+# %%
 ##############################################################################
 ##---------MAPPING THE SELECTED POINTS OVER THE DATASET DOMIAN AREA---------##
 ##############################################################################
@@ -1132,9 +1136,9 @@ ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
 ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
 plt.title("Location of Selected "+str(num_pixels)+" Random Pixels", pad=20)
 plt.legend()
-plt.savefig(bd_out_fig+"Test_MapRandomPixels.png", format='png', dpi=300, transparent=True)
+# plt.savefig(bd_out_fig+"Test_MapRandomPixels.png", format='png', dpi=300, transparent=True)
 plt.show()
-
+# %%
 #############################################################################
 ##---------------------GENERATING THE NUMPY ARRAY OF DATETIMES ------------##
 #############################################################################
@@ -1161,7 +1165,7 @@ for model, subset_arr in zip(models, subset_arrays):
         all_rs.append(rs)
     
     all_rs_by_model[model] = np.array(all_rs)
-
+# %%
 #############################################################################
 ##------COMPUTTING THE TIMES OF NO CORRELATION WITH THE TWO APPROACHES-----##
 #############################################################################
@@ -1201,7 +1205,7 @@ for m in range(len(models)):
     h_corr_mean_by_model[model_name] = h_corr_m
     tau_d_mean_by_model[model_name]  = tau_d_m
 
-
+# %%
 #############################################################################
 ##-------SETTING UP SMEV PARAMETERS FOR SMEV RETURN LEVELS ESTIMATION------##
 #############################################################################
@@ -1253,7 +1257,7 @@ for m in range(len(models)):
     # plt.savefig(bd_out_fig+"Test_WeibullPlot_SMEV_p_positiveX_"+model_name+".png", format='png', dpi=300, transparent=True)
     # plt.show()
     plt.close()
-
+# %%
 ##########################################################################################
 ##----------PROPORTION OF THE EXPLAINEN VARIANCE BY THE WEIBULL LINEAR FIT (R2)---------##
 ##########################################################################################
@@ -1266,7 +1270,7 @@ global_min_r2 = min(val**2 for lists in g_r_value_model.values() for sublist in 
 
 print("Diccionario con R²:", g_r2_model)
 print("Mínimo global de R²:", global_min_r2)
-
+# %%
 ###############################################################################
 ##------PLOTTING SHAPE AND SCALE PARAMETER DOR EACH CENSORING THERSHOLD------##
 ###############################################################################
@@ -1313,7 +1317,7 @@ legend = ax.legend(bbox_to_anchor=(0.1, -0.2), loc='upper left', ncol=6, fontsiz
 plt.subplots_adjust(wspace=0.25, hspace=0.45, left=0.10, right=0.97, bottom=0.30)
 # plt.savefig(bd_out_fig+'Test_ShapeScale_CensoredPortions.png', format='png', dpi=300, transparent=True)
 plt.show()
-
+# %%
 ###############################################################################
 ##-------PLOTTING WEIBULL DISTRIBUTION AND FIT FOR THE ORDINARY EVENTS-------##
 ###############################################################################
@@ -1362,7 +1366,7 @@ for i in range(len(series_labels)):
 plt.subplots_adjust(wspace=0.30, hspace=0.4, left=0.10, right =0.97, bottom = 0.20) 
 # plt.savefig(bd_out_fig+"Test_RandomPixesl_OrdWeibullFitDistribution.png", format='png', dpi=300, transparent=True)
 plt.show()
-
+# %%
 ###############################################################################
 ##--------------COMPUTTING RL FROM SMEV AND TRADITIONAL METHODS--------------##
 ###############################################################################
@@ -1438,7 +1442,7 @@ anumax_total  = np.array(anumax_total)
 ppamax_total  = np.array(ppamax_total)
 amaxcr_total  = np.array(amaxcr_total)
 pamaxcr_total = np.array(pamaxcr_total)
-
+# %%
 ###############################################################################
 ##---------------PLOTTING RL FROM SMEV AND TRADITIONAL METHODS---------------##
 ###############################################################################
@@ -1490,7 +1494,7 @@ plt.subplots_adjust(wspace=0.30, hspace=0.4, left=0.10, right =0.97, bottom = 0.
 # plt.savefig(bd_out_fig+"Test_RL_Estimtion_MultiMethods.png", format='png', dpi=300, transparent=True)
 plt.show()
 
-
+# %%
 ###############################################################################
 ##---------MONTE CARLO WEIBULL TAIL TEST POR MODELO (MARRA 2023)-------------##
 ###############################################################################
@@ -1574,7 +1578,7 @@ for model_name in models:
     if model_results:
         accepted = sum(1 for r in model_results if r.get('optimal_threshold', 95) < 95)
         print(f"Series with accepted Weibull: {accepted}/{len(model_results)}")
-
+# %%
 
 
 
