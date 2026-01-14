@@ -8,6 +8,9 @@ import os,glob,sys
 import matplotlib.pyplot as plt
 from matplotlib.ticker import LogLocator, AutoMinorLocator, FuncFormatter, NullLocator
 import matplotlib.ticker as ticker
+import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from smev_class import SMEV
@@ -483,8 +486,8 @@ def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percent
 
         # Confidence interval for scale (exp(intercept))
         conf_int_intercept = t_value * std_err * np.sqrt(1/n_include + np.mean(x_top)**2 / np.sum((x_top - np.mean(x_top))**2))
-        ci_scale_lower = np.exp(intercept - conf_int_intercept)
-        ci_scale_upper = np.exp(intercept + conf_int_intercept)
+        ci_scale_lower     = np.exp(intercept - conf_int_intercept)
+        ci_scale_upper     = np.exp(intercept + conf_int_intercept)
         ci_scales.append((ci_scale_lower, ci_scale_upper))
 
         # Generate points for the fitted line over the entire range
@@ -514,23 +517,26 @@ def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percent
         print(f"Weibull shape: {weibull_param[0]:.4f}")
         print(f"Weibull scale: {weibull_param[1]:.4f}\n")
     if pos_f > n_c:
-        plt.xlabel(x_label, fontsize=12)
+        plt.xlabel(x_label, fontsize=13)
     else:
         pass
     if pos_f == 1 or pos_f ==7 :
-        plt.ylabel('ln(Wind Speed)', fontsize=12)
+        plt.ylabel('ln(Wind Speed)', fontsize=13)
     else:
         pass    
     plt.title(fig_title, fontsize=14)
     if positive_x:
         plt.xlim(left=0)  # Set x-axis to start from 0 -- Logatirmic range of values of WS
-        plt.ylim(2, 3.5) 
+        plt.ylim(2, 4) 
         # plt.ylim(bottom=0)  # Set y-axis to start from 0
     else:
         pass
     # plt.legend()
     plt.grid(True, which="both", ls="-", alpha=0.2)
-    plt.tick_params(which='both', direction='in')
+    ax = plt.gca()  # Obtener el eje actual
+    ax.yaxis.set_major_locator(MultipleLocator(0.5))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    plt.tick_params(labelsize=11, which='both', direction='in')
     # plt.savefig(bd_out_fig+name_fig, format='png', dpi=300, transparent=True)
     # plt.show()
 
@@ -1151,8 +1157,8 @@ dates_np   = dates.to_numpy() # Convert dates to numpy datetime64 array
 ##-----COMPUTTING THE OUTOCORRELOGRAM TO FIND THE MOST SUITABLE HOURS------##
 #############################################################################
 
-models = ['ETH', 'CNRM', 'CMCC']
-subset_arrays = [subset_arr_eth, subset_arr_cnrm, subset_arr_cmcc]
+models          = ['ETH', 'CNRM', 'CMCC']
+subset_arrays   = [subset_arr_eth, subset_arr_cnrm, subset_arr_cmcc]
 all_rs_by_model = {}
 
 for model, subset_arr in zip(models, subset_arrays):
@@ -1219,10 +1225,11 @@ time_resolution = 60 # In Minutes
 return_periods = [2, 5, 10, 20, 50]
 series_labels  = [str (n) for n in range(1, num_pixels+1)]
 
+# %%
 ##########################################################################################
 ##---RETURN LEVELS SMEV-WEIBULL PLOTS WITH DIFFERENT THRESHOLDS FOR LEFT SENSORING------##
 ##########################################################################################
-
+subset_arrays   = { 'ETH': subset_arr_eth, 'CNRM': subset_arr_cnrm, 'CMCC': subset_arr_cmcc}
 g_shape_p_model = {}
 g_scale_p_model = {}
 g_r_value_model = {}
@@ -1230,11 +1237,12 @@ g_r_value_model = {}
 for m in range(len(models)):
     model_name = models[m]
     tau_d_list = tau_d_by_model[model_name] 
-
+    subset_arr = subset_arrays[model_name]
+    
     g_shape_p = []
     g_scale_p = []
     g_r_value = []
-    Fig  = plt.figure(figsize=(12, 6))
+    Fig       = plt.figure(figsize=(16, 8))
     for i in range(len(series_labels)):
         s_arr  = subset_arr[:, i]
         p_cor  = int(round(tau_d_list [i], 0))
@@ -1242,7 +1250,7 @@ for m in range(len(models)):
 
         smev_r_p, df_ord_events_p                  = simple_mev_newsep(s_arr, dates, return_periods, threshold_meas, p_cor, durations, time_resolution, [p_cens, 1])
         oe_smev_p                                  = df_ord_events_p['value'].values
-        list_shape, list_scale, _, _, list_r_value = weibull_subplot_censored(oe_smev_p, f"Serie {series_labels[i]}", 2, 6, i+1, censoring_percentages=[75, 80, 85, 90, 95], confidence_level=0.95, method = 'Trad', positive_x = True)
+        list_shape, list_scale, _, _, list_r_value = weibull_subplot_censored(oe_smev_p, f"Series {series_labels[i]}", 2, 6, i+1, censoring_percentages=[75, 80, 85, 90, 95], confidence_level=0.95, method = 'Trad', positive_x = True)
         
         g_shape_p.append(list_shape)
         g_scale_p.append(list_scale)
@@ -1252,11 +1260,32 @@ for m in range(len(models)):
     g_scale_p_model[model_name] = g_scale_p
     g_r_value_model[model_name] = g_r_value
 
-    plt.suptitle("Weibull Plot of Ordinary events CPM:"+model_name, fontsize=14, y=0.98)
-    plt.subplots_adjust(wspace=0.30, hspace=0.4, left=0.10, right =0.97, bottom = 0.20)     
-    # plt.savefig(bd_out_fig+"Test_WeibullPlot_SMEV_p_positiveX_"+model_name+".png", format='png', dpi=300, transparent=True)
-    # plt.show()
-    plt.close()
+    # ========================================================================    
+    # Crear handles personalizados para la leyenda
+    legend_handles = []
+    legend_labels  = []     
+    scatter_handle = Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', markeredgecolor='gray',
+                       markersize=8, alpha=0.4, linestyle='None')
+    legend_handles.append(scatter_handle)
+    legend_labels.append('Ordinary Events') 
+
+    censoring_percentages = [75, 80, 85, 90, 95]
+    colors                = plt.cm.rainbow(np.linspace(0, 1, len(censoring_percentages)))
+    for censoring_percentage, color in zip(censoring_percentages, colors):
+        # Crear línea personalizada imaginaria
+        line = Line2D([0], [0], color=color, linestyle='-', linewidth=2.5, label=f'Top {100-censoring_percentage:.0f}%')
+        legend_handles.append(line)
+        legend_labels.append(f'Top {100-censoring_percentage:.0f}%')
+
+    Fig.legend(legend_handles, legend_labels, loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=len(censoring_percentages)+1,  # Una fila horizontal
+              fontsize=12, frameon=True, framealpha=0.9, edgecolor='black')    
+    # ========================================================================
+
+    plt.suptitle("Weibull Plot of ordinary events from:"+model_name, fontsize=15, y=0.98)     
+    plt.subplots_adjust( wspace=0.25, hspace=0.20, left=0.06, right=0.98, top=0.89, bottom=0.15)
+    plt.savefig(bd_out_fig+"Test_WeibullPlot_SMEV_p_positiveX_"+model_name+".png", format='png', dpi=300, transparent=True)
+    plt.show()
+    # plt.close()
 # %%
 ##########################################################################################
 ##----------PROPORTION OF THE EXPLAINEN VARIANCE BY THE WEIBULL LINEAR FIT (R2)---------##
