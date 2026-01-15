@@ -29,6 +29,8 @@ in subsequent triple-collocation analyses.
 
 The updated routine uses the cropped CORDEX domain. 
 
+NOTE: The indices saved in your NPZ are relative to the adjusted raster (band1).
+
 Author : Nathalia Correa-Sánchez
 """
 
@@ -417,6 +419,11 @@ fl_cats  = df_filt['value'].values.astype(int)
 ds_eth  = load_ds(bd_in_eth)
 ds_cnrm = load_ds(bd_in_cnrm)
 ds_cmcc = load_ds(bd_in_cmcc)
+
+# Set random seeds for reproducibility
+np.random.seed(42)
+random.seed(42)
+print(f"Random seed set to: {42}")
 
 coords_dict = {}
 for i in range(len(fl_cats)):

@@ -24,6 +24,7 @@ from scipy.stats import gumbel_r
 import random
 import rasterio
 from pathlib import Path
+from affine import Affine
 
 """
 Codigo para conducir los Weibull Tail Tests para la implementacion de SMEV. 
@@ -1013,7 +1014,11 @@ comblay              = rasterio.open(bd_in_rast+"SEA-LANDCropped_Combined_RIX_re
 band1_o              = comblay.read(1) ## Solo tiene una banda
 band1_o[band1_o < 0] = np.nan          ## Reemplazando los negativos con nan o 0(Tener en cuenta NoData= -3.40282e+38) 
 # Ajustillo para que coincida los xarrays (incluso despues del crop)
-band1 = np.delete(np.delete(band1_o, filas_eliminar[0], axis=0), columnas_eliminar[0], axis=1) 
+band1              = np.delete(np.delete(band1_o, filas_eliminar[0], axis=0), columnas_eliminar[0], axis=1) 
+# Obtener la transformación geoespacial del raster
+transform          = comblay.transform
+# Calcular nueva transformación para band1 ajustado
+adjusted_transform = transform * Affine.translation(1, 1) #shifts the transformation reference point.
 
 # Obteniendo valores unicos de las categorias
 unique_vals    = np.unique(band1)
@@ -1032,7 +1037,6 @@ for val in unique_vals:
 counts_array = np.array([pixel_counts[val] for val in unique_vals])
 
 df_cats = pd.DataFrame({'value': unique_vals, 'count': counts_array,})
-
 
 ########################################################################################
 ##--------FILTERING CATEGORIES UNDER THE 25% PERCENTILE: LOW ATYPICAL VALUES----------##
@@ -1094,8 +1098,8 @@ subset_arr_cmcc = np.array([all_series_cmcc[i] for i in selected_indices]).T # s
 # Coordenadas y categorías seleccionadas (equivalentes a lon_indices, lat_indices)
 coordinates_selected = [all_coordinates[i] for i in selected_indices]
 categories_selected  = [all_categories[i] for i in selected_indices]
-lon_indices = [coord[1] for coord in coordinates_selected]  # longitudes
-lat_indices = [coord[0] for coord in coordinates_selected]  # latitudes
+lon_indices          = [coord[1] for coord in coordinates_selected]  # longitudes
+lat_indices          = [coord[0] for coord in coordinates_selected]  # latitudes
 
 print(f"Selected {num_pixels} random series")
 print(f"ETH subset_arr shape: {subset_arr_eth.shape}")
@@ -1108,33 +1112,34 @@ print(f"Categories distribution: {set(categories_selected)}") # Debido a la sele
 ##---------MAPPING THE SELECTED POINTS OVER THE DATASET DOMIAN AREA---------##
 ##############################################################################
 
-# Usar ETH como referencia (puede ser cualquier modelo)
-sample_file_eth = f"{bd_in_eth}crop_wsa100m_ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_CLMcom-ETH-COSMO-crCLIM_fpsconv-x2yn2-vrembil3km_1hr_200001010000-200012312300.nc"  # Ajustar nombre según tu estructura
-ds_reference    = xr.open_dataset(sample_file_eth)
+# Convertir índices a coordenadas geográficas correctas
+selected_lats = []
+selected_lons = []
+for i in range(len(coordinates_selected)):
+    row = lat_indices[i]  # Índice de fila en band1 del npz
+    col = lon_indices[i]  # Índice de columna en band1 del npz
+    
+    # Convertir índices a coordenadas usando la transformación del raster
+    # +0.5 para obtener el CENTRO del píxel
+    lon_geo, lat_geo = adjusted_transform * (col + 0.5, row + 0.5)
+    
+    selected_lons.append(lon_geo)
+    selected_lats.append(lat_geo)
 
-lat_arr = ds_reference.lat.values
-lon_arr = ds_reference.lon.values
-
-ds_reference.close()
-
-
+selected_lats = np.array(selected_lats)
+selected_lons = np.array(selected_lons)
+# %%
 fig = plt.figure(figsize=(12, 8))
 ax  = plt.axes(projection=ccrs.PlateCarree())
-
 ax.add_feature(cfeature.COASTLINE)
 ax.add_feature(cfeature.BORDERS, linestyle=':')
 ax.add_feature(cfeature.OCEAN, facecolor='lightblue')
 ax.add_feature(cfeature.LAND, facecolor='lightgray')
-
-# Obtener las coordenadas reales de los píxeles seleccionados
-selected_lats = lat_arr[lat_indices]
-selected_lons = lon_arr[lon_indices]
-
 # Plotear los puntos seleccionados
 ax.plot(selected_lons, selected_lats, 'rx', markersize=10, transform=ccrs.PlateCarree(), label='Selected pixels')
 
 # Configurar los límites del mapa
-buffer = 5  # grados de buffer alrededor de los puntos
+buffer           = 5  # grados de buffer alrededor de los puntos
 lon_min, lon_max = min(selected_lons) - buffer, max(selected_lons) + buffer
 lat_min, lat_max = min(selected_lats) - buffer, max(selected_lats) + buffer
 ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())

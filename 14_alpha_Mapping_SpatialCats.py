@@ -1,3 +1,5 @@
+
+# %%
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -10,10 +12,14 @@ import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
 import pandas as pd
 import pickle
+from affine import Affine
+from pathlib import Path
 
 """
 Code for visualizing the four maps of spatial categories and the combination of them
 into a single figure for the publication. 
+
+NOTE:The row and col indices in the NPZ are relative to band1 (adjusted).
 
 Author: Nathalia Correa-Sánchez
 """
@@ -21,16 +27,16 @@ Author: Nathalia Correa-Sánchez
 ########################################################################################
 ##-------------------------------DEFINING IMPORTANT PATHS-----------------------------##
 ########################################################################################
-
-file_cats  = "/Dati/Outputs/Climate_Provinces/CSVs/Combination_RIX.csv"
-bd_out_fig = "/Dati/Outputs/Plots/WP3_development/"
-bd_in_rast = "/Dati/Outputs/Climate_Provinces/Development_Rasters/FinalRasters_In-Out/"
+STORAGE    = Path("/mnt/smb").as_posix()
+file_cats  = STORAGE + "/Outputs/Climate_Provinces/CSVs/Combination_RIX.csv"
+bd_out_fig = STORAGE + "/Outputs/Plots/WP3_development/"
+bd_in_rast = STORAGE + "/Outputs/Climate_Provinces/Development_Rasters/FinalRasters_In-Out/"
 ras_clim   = "ReducedBeck-KG_present_ALP3_remCPM_WGS84.tif"
 ras_rough  = "CMCC_Z0-Class_ALP3_remCPM_WGS84.tif"
 ras_topog  = "ReducedSurface_VarianceSlope_ALP3_remCPM_WGS84.tif"
 ras_comb   = "SEA-LAND_Combined_RIX_remCPM_WGS84.tif"
-bd_out_tc  = "/Dati/Outputs/WP3_SamplingSeries_CPM/"
-
+bd_out_tc  = STORAGE + "/Outputs/WP3_SamplingSeries_CPM/"
+# %%
 ########################################################################################
 ##------------------------------DEFINNING RELEVANT INPUTS-----------------------------##
 ########################################################################################
@@ -55,7 +61,7 @@ for i, raster_file in enumerate(raster_files):
 ########################################################################################
 ##-----------------------------DEFINING MAP PARAMETERS-------------------------------##
 ########################################################################################
-
+# %%
 # Define default nodata value based on your project's pattern
 DEFAULT_NODATA = -3.40282e+38  # Based on your other scripts
 
@@ -76,7 +82,7 @@ crop_coords = {'lon_min': 0.5,     # Western limit   : 0.5°E
                'lat_max': 49.7  }  # Northern limit  : 49.6°N
 
 extent = [crop_coords['lon_min'], crop_coords['lon_max'], crop_coords['lat_min'], crop_coords['lat_max']]
-
+# %%
 ########################################################################################
 ##-----------------------------DEFINING RELEVANT FUNCTIONS----------------------------##
 ########################################################################################
@@ -94,17 +100,16 @@ def decode_category(cat_value):
         return climate, roughness, slope
     else:
         return None, None, None
-
+# %%
 ########################################################################################
 ##-----ABRIENDO EL CROPPED RASTER PARA EXTRAER CADA CLASE & AJUSTANDO EL DATAFRAME----##
 ########################################################################################
-
-
 comblay              = rasterio.open(bd_in_rast+"SEA-LANDCropped_Combined_RIX_remCPM_WGS84.tif")
 band1_o              = comblay.read(1) ## Solo tiene una banda
 band1_o[band1_o < 0] = np.nan          ## Reemplazando los negativos con nan o 0(Tener en cuenta NoData= -3.40282e+38) 
 # Ajustillo para que coincida los xarrays (incluso despues del crop)
-band1 = np.delete(np.delete(band1_o, filas_eliminar[0], axis=0), columnas_eliminar[0], axis=1) 
+band1                = np.delete(np.delete(band1_o, filas_eliminar[0], axis=0), columnas_eliminar[0], axis=1) 
+band1_transform      = comblay.transform # Obtener la transformación geoespacial del raster
 
 # Obteniendo valores unicos de las categorias
 unique_vals    = np.unique(band1)
@@ -136,7 +141,7 @@ p25         = np.percentile(percentages, 25)
 df_filt     = df_cats[df_cats.rel_freq >= p25]
 df_filt     = df_filt.reset_index(drop=True) ## Resetea el indice que se habia dañado luego del filtrado. 
 fl_cats     = df_filt['value'].values.astype(int)
-
+# %%
 ########################################################################################
 ##----------------LOADING THE COORDINATES TO BE USED TO ALOCATE THE RANDOM POINTS----------------##
 ########################################################################################
@@ -146,7 +151,7 @@ fl_cats     = df_filt['value'].values.astype(int)
 with open(bd_out_tc + 'Random_coords_N100.pkl', 'rb') as f:
     coords_dict = pickle.load(f)
 
-
+# %%
 ########################################################################################
 ##-----------------MAPPING RASTERS FOR VISUALIZATION OF THE CATEGORIES----------------##
 ########################################################################################
@@ -216,6 +221,9 @@ for i, (raster_file, title, ax) in enumerate(zip(raster_files[:3], titles[:3], a
         ax.set_title(title, fontsize=14, fontweight='bold')
 
 # Process combined categories raster
+
+
+adjusted_transform = band1_transform * Affine.translation(1, 1) #shifts the transformation reference point.
 
 water_color     = '#345F77'  # Azul petróleo oscuro con toque grisáceo para el agua
 band1_transform = comblay.transform
@@ -292,7 +300,7 @@ for i, cat in enumerate(fl_cats):
                 continue
                 
             # Usar la transformación exacta de rasterio para convertir fila/columna a coordenadas
-            x, y = band1_transform * (col + 0.5, row + 0.5)
+            x, y = adjusted_transform * (col + 0.5, row + 0.5)
             xs.append(x)
             ys.append(y)
             
@@ -311,9 +319,9 @@ for i, cat in enumerate(fl_cats):
 print(f"Puntos válidos: {valid_count}, Puntos inválidos: {invalid_count}")
 ax4.legend(bbox_to_anchor=(0.5, -0.1), loc='upper center', fontsize=13, framealpha=0.8, ncol=1)
 
-plt.savefig(bd_out_fig+'Maps_StudyAreas_SpatialCats.png', dpi=300, bbox_inches='tight', transparent=True)
+# plt.savefig(bd_out_fig+'Maps_StudyAreas_SpatialCats.png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
-
+# %%
 ########################################################################################
 ##--------------------VISUALIZING DISTRIBUTION OF SPATIAL CATEGORIES------------------##
 ########################################################################################
