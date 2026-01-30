@@ -40,7 +40,7 @@ Author : Nathalia Correa-Sánchez
 #############################################################################
 STORAGE     = Path("/mnt/smb").as_posix()
 bd_in_ws    = STORAGE + "/Data/WS_CORDEXFPS/"
-bd_out_fig  = "/home/nathalia/Outputs/Plots/WP3_development" # Por ahora en la maquina virtual de procesamiento
+bd_out_fig  = "/home/nathalia/Outputs/Plots/WP3_development/" # Por ahora en la maquina virtual de procesamiento
 bd_out_am   = STORAGE + "/Outputs/AM_ws100m/"
 bd_in_eth   = bd_in_ws + "ETH/wsa100m_crop/"
 bd_in_cmcc  = bd_in_ws + "CMCC/wsa100m_crop/"
@@ -413,7 +413,7 @@ def gpd_fit(data, threshold, return_periods, h_corr, dt_arr):
     
     return list_ut, list_sigma_ut
 
-def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percentages=[75, 80, 85], confidence_level=0.95, method = 'Trad', positive_x = False):
+def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percentages=[90], confidence_level=0.95, method = 'Trad', positive_x = False):
     """
     - method : 'Trad' for ln(-ln(1-p)), any other string for ln(ln(1 / (1 - p)))
     """
@@ -447,7 +447,7 @@ def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percent
     ax = Fig.add_subplot(n_r,n_c,pos_f)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    plt.scatter(x, y, alpha=0.4, color='gray', label='All Data')
+    plt.scatter(x, y, alpha=0.4, color='gray', label='Ordinary Events')
 
     colors = plt.cm.rainbow(np.linspace(0, 1, len(censoring_percentages)))
 
@@ -507,8 +507,8 @@ def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percent
             alp = 0.3
         else:
             alp = 0.7
-        plt.scatter(x_top, y_top, marker='x', label=f'Top {100-censoring_percentage:.0f}%', color=color, alpha=alp)
-        plt.plot(x_fit, y_fit, ls ='--', label=f'Fitted Line (Top {100-censoring_percentage:.0f}%)', color=color, linewidth=2)
+        plt.scatter(x_top, y_top, marker='x', label=f'Top {100-censoring_percentage:.0f}%', color='red', alpha=alp)
+        plt.plot(x_fit, y_fit, ls ='--', label=f'Fitted Line (Top {100-censoring_percentage:.0f}%)', color='black', linewidth=2)
         # plt.fill_between(x_fit, y_fit_lower, y_fit_upper, color=color, alpha=0.2, label=f'95% Confidence Interval (Top {100-censoring_percentage:.0f}%)')
 
         print(f"Top {100-censoring_percentage:.0f}%:")
@@ -517,29 +517,28 @@ def weibull_subplot_censored(data, fig_title, n_r, n_c, pos_f, censoring_percent
         print(f"R-squared: {r_value**2:.4f}")
         print(f"Weibull shape: {weibull_param[0]:.4f}")
         print(f"Weibull scale: {weibull_param[1]:.4f}\n")
-    if pos_f > n_c:
+    if pos_f ==9 or pos_f ==10 or pos_f==11 or pos_f==12:
         plt.xlabel(x_label, fontsize=13)
     else:
         pass
-    if pos_f == 1 or pos_f ==7 :
+    if pos_f == 1 or pos_f ==5 or pos_f==9 :
         plt.ylabel('ln(Wind Speed)', fontsize=13)
     else:
         pass    
     plt.title(fig_title, fontsize=14)
     if positive_x:
-        plt.xlim(left=0)  # Set x-axis to start from 0 -- Logatirmic range of values of WS
+        plt.xlim(0,2.5)  # Set x-axis to start from 0 -- Logatirmic range of values of WS
+        # plt.xlim(left=0)  # Set x-axis to start from 0 -- Logatirmic range of values of WS
         plt.ylim(2, 4) 
         # plt.ylim(bottom=0)  # Set y-axis to start from 0
     else:
         pass
-    # plt.legend()
+    
     plt.grid(True, which="both", ls="-", alpha=0.2)
     ax = plt.gca()  # Obtener el eje actual
     ax.yaxis.set_major_locator(MultipleLocator(0.5))
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     plt.tick_params(labelsize=11, which='both', direction='in')
-    # plt.savefig(bd_out_fig+name_fig, format='png', dpi=300, transparent=True)
-    # plt.show()
 
     return global_shapes, global_scales, ci_shapes, ci_scales, global_r_value
 
@@ -1147,7 +1146,7 @@ ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
 ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
 plt.title("Location of Selected "+str(num_pixels)+" Random Pixels", pad=20)
 plt.legend()
-# plt.savefig(bd_out_fig+"Test_MapRandomPixels.png", format='png', dpi=300, transparent=True)
+plt.savefig(bd_out_fig+"Test_MapRandomPixels.png", format='png', dpi=300, transparent=True)
 plt.show()
 # %%
 #############################################################################
@@ -1255,7 +1254,7 @@ for m in range(len(models)):
 
         smev_r_p, df_ord_events_p                  = simple_mev_newsep(s_arr, dates, return_periods, threshold_meas, p_cor, durations, time_resolution, [p_cens, 1])
         oe_smev_p                                  = df_ord_events_p['value'].values
-        list_shape, list_scale, _, _, list_r_value = weibull_subplot_censored(oe_smev_p, f"Series {series_labels[i]}", 2, 6, i+1, censoring_percentages=[75, 80, 85, 90, 95], confidence_level=0.95, method = 'Trad', positive_x = True)
+        list_shape, list_scale, _, _, list_r_value = weibull_subplot_censored(oe_smev_p, f"Series {series_labels[i]}", 3, 4, i+1, censoring_percentages=[90], confidence_level=0.95, method = 'Trad', positive_x = True)
         
         g_shape_p.append(list_shape)
         g_scale_p.append(list_scale)
@@ -1269,28 +1268,31 @@ for m in range(len(models)):
     # Crear handles personalizados para la leyenda
     legend_handles = []
     legend_labels  = []     
-    scatter_handle = Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', markeredgecolor='gray',
-                       markersize=8, alpha=0.4, linestyle='None')
+
+    # Ordinary events (gris)
+    scatter_handle = Line2D([0], [0], marker='o', color='w', markerfacecolor='gray', markeredgecolor='gray', markersize=8, alpha=0.4, linestyle='None')
     legend_handles.append(scatter_handle)
     legend_labels.append('Ordinary Events') 
 
-    censoring_percentages = [75, 80, 85, 90, 95]
-    colors                = plt.cm.rainbow(np.linspace(0, 1, len(censoring_percentages)))
-    for censoring_percentage, color in zip(censoring_percentages, colors):
-        # Crear línea personalizada imaginaria
-        line = Line2D([0], [0], color=color, linestyle='-', linewidth=2.5, label=f'Top {100-censoring_percentage:.0f}%')
-        legend_handles.append(line)
-        legend_labels.append(f'Top {100-censoring_percentage:.0f}%')
+    # Top 10% (rojo)
+    scatter_top10 = Line2D([0], [0], marker='x', color='w', markerfacecolor='red', markeredgecolor='red', markersize=8, alpha=0.7, linestyle='None')
+    legend_handles.append(scatter_top10)
+    legend_labels.append('Top 10%')
 
-    Fig.legend(legend_handles, legend_labels, loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=len(censoring_percentages)+1,  # Una fila horizontal
-              fontsize=12, frameon=True, framealpha=0.9, edgecolor='black')    
+    # Fitted line (negro, discontinua)
+    fitted_line = Line2D([0], [0], color='black', linestyle='--', linewidth=2)
+    legend_handles.append(fitted_line)
+    legend_labels.append('Fitted Line (Top 10%)')
+
+    Fig.legend(legend_handles, legend_labels, loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=3,  # <-- Ahora ncol=3
+            fontsize=12, frameon=True, framealpha=0.9, edgecolor='black')
     # ========================================================================
 
     plt.suptitle("Weibull Plot of ordinary events from:"+model_name, fontsize=15, y=0.98)     
-    plt.subplots_adjust( wspace=0.25, hspace=0.20, left=0.06, right=0.98, top=0.89, bottom=0.15)
+    plt.subplots_adjust( wspace=0.25, hspace=0.45, left=0.06, right=0.98, top=0.89, bottom=0.15)
+    # plt.show()
     plt.savefig(bd_out_fig+"Test_WeibullPlot_SMEV_p_positiveX_"+model_name+".png", format='png', dpi=300, transparent=True)
-    plt.show()
-    # plt.close()
+    plt.close()
 # %%
 ##########################################################################################
 ##----------PROPORTION OF THE EXPLAINEN VARIANCE BY THE WEIBULL LINEAR FIT (R2)---------##
