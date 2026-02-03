@@ -488,7 +488,7 @@ ax2.tick_params(which='both', direction='in', labelsize=15)
 
 plt.tight_layout()
 plt.savefig(bd_out_fig + 'PDF_Exceedance_FullTimeSeries.png', dpi=300, bbox_inches='tight', transparent=True)
-plt.show()
+# plt.show()
 
 # %%
 ##########################################################################################
@@ -844,8 +844,8 @@ fig.legend(handles, labels, loc='lower center', ncol=3, fontsize=15.5, frameon=F
 plt.tight_layout()
 plt.subplots_adjust(wspace=0.20, hspace=0.63, left=0.07, right=0.98, bottom=0.15, top=0.90)
 # # fig.suptitle(f"Monthly maximum wind speed correlation by spatial category", fontsize=16, fontweight='bold', y=0.98)
-# plt.savefig(f"{bd_out_fig}Monthly_Correlation_P99_by_Category.png", dpi=300, bbox_inches='tight', transparent=True)
-plt.show()
+plt.savefig(f"{bd_out_fig}Monthly_Correlation_P99_by_Category.png", dpi=300, bbox_inches='tight', transparent=True)
+# plt.show()
 
 # %%
 ###################################################################################################
