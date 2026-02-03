@@ -41,7 +41,7 @@ Author : Nathalia Correa-Sánchez
 ########################################################################################
 STORAGE        = Path("/mnt/smb").as_posix()
 bd_in_ws       = STORAGE + "/Data/WS_CORDEXFPS/"
-bd_out_fig     = "/home/nathalia/Outputs/Plots/WP3_development" # Por ahora en la maquina virtual de procesamiento
+bd_out_fig     = "/home/nathalia/Outputs/Plots/WP3_development/" # Por ahora en la maquina virtual de procesamiento
 bd_out_am      = STORAGE + "/Outputs/AM_ws100m/"
 bd_in_eth      = bd_in_ws + "ETH/wsa100m_crop/"
 bd_in_cmcc     = bd_in_ws + "CMCC/wsa100m_crop/"
@@ -319,6 +319,13 @@ hist_cmcc = hist_cmcc.compute()
 
 bin_centers = (bins[:-1] + bins[1:]) / 2
 
+if not isinstance(hist_eth, np.ndarray):
+    print("Converting to numpy arrays...")
+    hist_eth = np.array(hist_eth)
+    hist_cnrm = np.array(hist_cnrm)
+    hist_cmcc = np.array(hist_cmcc)
+    bin_centers = np.array(bin_centers)
+
 data_eth_flat  = ds_eth.wsa100m.data.flatten()
 data_cnrm_flat = ds_cnrm.wsa100m.data.flatten()
 data_cmcc_flat = ds_cmcc.wsa100m.data.flatten()
@@ -330,12 +337,43 @@ quantiles_eth  = da.percentile(data_eth_flat, percentiles).compute()
 quantiles_cnrm = da.percentile(data_cnrm_flat, percentiles).compute()
 quantiles_cmcc = da.percentile(data_cmcc_flat, percentiles).compute()
 cdf_values     = percentiles / 100
+
+print ("To compute exceedance probability. It takes ages...")
+# Calculate 1-CDF (exceedance probability)
+exceedance_prob = 1 - cdf_values
+
+# Pre-compute log of exceedance (igual para todos los modelos)
+# Filtrar primero para evitar log(0)
+valid_exceedance = exceedance_prob > 0
+log_exceedance   = np.full_like(exceedance_prob, np.nan)
+log_exceedance[valid_exceedance] = np.log(exceedance_prob[valid_exceedance])
+
+# 3. Para cada modelo, solo calcular log(quantiles) una vez
+# ETH
+valid_eth   = (quantiles_eth > 0) & valid_exceedance
+log_ws_eth  = np.log(quantiles_eth[valid_eth])
+log_exc_eth = log_exceedance[valid_eth]
+
+# CNRM
+valid_cnrm   = (quantiles_cnrm > 0) & valid_exceedance
+log_ws_cnrm  = np.log(quantiles_cnrm[valid_cnrm])
+log_exc_cnrm = log_exceedance[valid_cnrm]
+
+# CMCC
+valid_cmcc   = (quantiles_cmcc > 0) & valid_exceedance
+log_ws_cmcc  = np.log(quantiles_cmcc[valid_cmcc])
+log_exc_cmcc = log_exceedance[valid_cmcc]
+
+##########################################################################################
+###----------------------------COMPUTTING OTHER STATISTICS-----------------------------###
+##########################################################################################
+
 # %%
 # Computting the overall statistics
 
 print("Computing statistics...")
 
-stats = {}
+stats_cmp = {}
 
 # Procesar cada modelo UNO A LA VEZ
 for name, data_flat in [('ETH', data_eth_flat), 
@@ -354,7 +392,7 @@ for name, data_flat in [('ETH', data_eth_flat),
     # Calcular todos los percentiles en UNA sola llamada (más eficiente)
     percentiles_vals = da.percentile(data_flat, [50, 95, 99]).compute()
     
-    stats[name] = {
+    stats_cmp[name] = {
         'mean': mean_val,
         'std': std_val,
         'p50': percentiles_vals[0],
@@ -365,59 +403,91 @@ for name, data_flat in [('ETH', data_eth_flat),
     print(f"    {name} done: mean={mean_val:.2f}, std={std_val:.2f}")
 
 print("\nAll statistics computed!")
-
+# %%
 # Formatear texto
-stats_text = (
+stats_cmp_text = (
     f"           Mean    Std     p50     p95     p99\n"
-    f"ETH:    {stats['ETH']['mean']:6.2f}  {stats['ETH']['std']:5.2f}  "
-    f"{stats['ETH']['p50']:6.2f}  {stats['ETH']['p95']:6.2f}  {stats['ETH']['p99']:6.2f}\n"
-    f"CNRM:   {stats['CNRM']['mean']:6.2f}  {stats['CNRM']['std']:5.2f}  "
-    f"{stats['CNRM']['p50']:6.2f}  {stats['CNRM']['p95']:6.2f}  {stats['CNRM']['p99']:6.2f}\n"
-    f"CMCC:   {stats['CMCC']['mean']:6.2f}  {stats['CMCC']['std']:5.2f}  "
-    f"{stats['CMCC']['p50']:6.2f}  {stats['CMCC']['p95']:6.2f}  {stats['CMCC']['p99']:6.2f}"
+    f"ETH:    {stats_cmp['ETH']['mean']:6.2f}  {stats_cmp['ETH']['std']:5.2f}  "
+    f"{stats_cmp['ETH']['p50']:6.2f}  {stats_cmp['ETH']['p95']:6.2f}  {stats_cmp['ETH']['p99']:6.2f}\n"
+    f"CNRM:   {stats_cmp['CNRM']['mean']:6.2f}  {stats_cmp['CNRM']['std']:5.2f}  "
+    f"{stats_cmp['CNRM']['p50']:6.2f}  {stats_cmp['CNRM']['p95']:6.2f}  {stats_cmp['CNRM']['p99']:6.2f}\n"
+    f"CMCC:   {stats_cmp['CMCC']['mean']:6.2f}  {stats_cmp['CMCC']['std']:5.2f}  "
+    f"{stats_cmp['CMCC']['p50']:6.2f}  {stats_cmp['CMCC']['p95']:6.2f}  {stats_cmp['CMCC']['p99']:6.2f}"
 )
 
-print("\n" + stats_text)
+print("\n" + stats_cmp_text)
 
 # %%
+##########################################################################################
+###---------------------PLOTTING TIME SERIE DISTIRBUTIONS AND CDF----------------------###
+##########################################################################################
+
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
-# Plot PDF
+
+# Panel (a): PDF
 ax1.plot(bin_centers, hist_eth, linewidth=2.5, color='#edae49', label='ETH', alpha=0.9)
 ax1.plot(bin_centers, hist_cnrm, linewidth=2.5, color='#00798c', label='CNRM', alpha=0.9)
 ax1.plot(bin_centers, hist_cmcc, linewidth=2.5, color='#d1495b', label='CMCC', alpha=0.9)
 ax1.fill_between(bin_centers, hist_eth, alpha=0.15, color='#edae49')
 ax1.fill_between(bin_centers, hist_cnrm, alpha=0.15, color='#00798c')
 ax1.fill_between(bin_centers, hist_cmcc, alpha=0.15, color='#d1495b')
-ax1.text(0.98, 0.97, stats_text, transform=ax1.transAxes, fontsize=14, verticalalignment='top', horizontalalignment='right',
+ax1.text(0.98, 0.97, stats_cmp_text, transform=ax1.transAxes, fontsize=14, 
+         verticalalignment='top', horizontalalignment='right',
          fontfamily='monospace', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
 ax1.set_xlabel('Wind Speed at 100m (m/s)', fontsize=15, fontweight='bold')
 ax1.set_ylabel('Probability Density', fontsize=16, fontweight='bold')
-ax1.set_title('(a) PDF', fontsize=19, fontweight='bold')
+ax1.set_title('(a) Probability Density Function', fontsize=19, fontweight='bold')
 ax1.legend(fontsize=15)
 ax1.grid(True, linestyle='--', alpha=0.3)
 ax1.set_xlim(0, 40)
+ax1.spines['top'].set_visible(False)
+ax1.spines['right'].set_visible(False) 
+ax1.yaxis.set_minor_locator(AutoMinorLocator())
+ax1.tick_params(which='both', direction='in', labelsize=15)
 
-# Plot CDF
-ax2.plot(quantiles_eth, cdf_values, linewidth=2.3, color='#edae49', label='ETH')
-ax2.plot(quantiles_cnrm, cdf_values, linewidth=2.3, color='#00798c', label='CNRM')
-ax2.plot(quantiles_cmcc, cdf_values, linewidth=2.3, color='#d1495b', label='CMCC')
-ax2.set_xlabel('Wind Speed at 100m (m/s)', fontsize=16, fontweight='bold')
-ax2.set_ylabel('Cumulative Probability', fontsize=16, fontweight='bold')
-ax2.set_title('(b) CDF', fontsize=19, fontweight='bold')
-ax2.legend(fontsize=15)
-ax2.grid(True, linestyle='--', alpha=0.3)
-ax2.set_xlim(0, 40)
-ax2.set_ylim(0, 1)
+# Panel (b): IMPROVED EXCEEDANCE PROBABILITY PLOT
+ax2.plot(log_ws_eth, log_exc_eth, linewidth=2.5, color='#edae49', label='ETH', alpha=0.9)
+ax2.plot(log_ws_cnrm, log_exc_cnrm, linewidth=2.5, color='#00798c', label='CNRM', alpha=0.9)
+ax2.plot(log_ws_cmcc, log_exc_cmcc, linewidth=2.5, color='#d1495b', label='CMCC', alpha=0.9)
+ax2.set_xlabel('ln(Wind Speed) [ln(m/s)]', fontsize=16, fontweight='bold')
+ax2.set_ylabel('ln(Exceedance Probability)', fontsize=16, fontweight='bold')
+ax2.set_title('(b) Tail Behavior of Extreme Winds', fontsize=19, fontweight='bold')
+ax2.set_xlim([2.3, 3.7])  # ~10-40 m/s # Focus on extremes range
+ax2.set_ylim([-7, -0.5])   # 0.01% - 60% exceedance
 
-for i, ax in enumerate([ax1, ax2]):
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False) 
-    ax.yaxis.set_minor_locator(AutoMinorLocator())
-    ax.tick_params(which='both', direction='in', labelsize=15)
-    
-# plt.suptitle('Full Hourly Time Series Distributions (10 years)', fontsize=20, fontweight='bold')
+# Secondary X-axis (top) with real wind speeds
+ax2_top = ax2.secondary_xaxis('top', functions=(np.exp, np.log))
+ax2_top.set_xlabel('Wind Speed (m/s)', fontsize=14, fontweight='bold')
+ax2_top.tick_params(labelsize=12)
+# Secondary Y-axis (right) with exceedance percentages
+def log_to_percent(log_val):
+    """Convert ln(prob) to percentage"""
+    return np.exp(log_val) * 100
+def percent_to_log(pct):
+    """Convert percentage to ln(prob)"""
+    return np.log(pct / 100)
+ax2_right = ax2.secondary_yaxis('right', functions=(log_to_percent, percent_to_log))
+ax2_right.set_ylabel('Exceedance Probability (%)', fontsize=14, fontweight='bold')
+ax2_right.tick_params(labelsize=12)
+
+p95_level  = np.log(1 - 0.95)   # ln(0.05) ≈ -3.0
+p99_level  = np.log(1 - 0.99)   # ln(0.01) ≈ -4.6
+p999_level = np.log(1 - 0.999) # ln(0.001) ≈ -6.9
+ax2.axhline(p95_level, color='gray', linestyle=':', linewidth=1.3, alpha=0.5)
+ax2.axhline(p99_level, color='gray', linestyle='--', linewidth=1.3, alpha=0.5)
+ax2.axhline(p999_level, color='gray', linestyle='-.', linewidth=1.3, alpha=0.5)
+ax2.text(3.5, p95_level, 'p95', fontsize=14, color='gray', verticalalignment='center', horizontalalignment='left', style='italic')
+ax2.text(3.5, p99_level, 'p99', fontsize=14, color='gray', verticalalignment='center', horizontalalignment='left', style='italic')
+ax2.text(3.5, p999_level, 'p99.9', fontsize=14, color='gray', verticalalignment='center', horizontalalignment='left', style='italic')
+ax2.legend(fontsize=15, loc='lower left', framealpha=0.95)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.xaxis.set_minor_locator(AutoMinorLocator())
+ax2.yaxis.set_minor_locator(AutoMinorLocator())
+ax2.tick_params(which='both', direction='in', labelsize=15)
+
 plt.tight_layout()
-# plt.savefig(bd_out_fig+'PDF_CDF_FullTimeSeries.png', dpi=300, bbox_inches='tight', transparent=True)
+plt.savefig(bd_out_fig + 'PDF_Exceedance_FullTimeSeries.png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
 # %%

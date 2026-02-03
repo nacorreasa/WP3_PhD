@@ -28,7 +28,7 @@ Author : Nathalia Correa-Sánchez
 #############################################################################
 STORAGE        = Path("/mnt/smb").as_posix()
 bd_in_ws       = STORAGE + "/Data/WS_CORDEXFPS/"
-bd_out_fig     = "/home/nathalia/Outputs/Plots/WP3_development" # Por ahora en la maquina virtual de procesamiento
+bd_out_fig     = "/home/nathalia/Outputs/Plots/WP3_development/" # Por ahora en la maquina virtual de procesamiento
 bd_out_ese     = STORAGE + "Data/WS_CORDEXFPS/Ensemble_Mean/wsa100m_SpatRes_Temporal/"
 bd_in_eth      = bd_in_ws + "ETH/wsa100m_crop/"
 bd_in_cmcc     = bd_in_ws + "CMCC/wsa100m_crop/"
@@ -313,28 +313,33 @@ ax1.tick_params(labelsize=13)
 ax1.legend(fontsize=13)
 
 # Subplot 2: Spatial distribution map 
-ax2                = fig.add_subplot(gs[1], projection=ccrs.PlateCarree())
+ax2 = fig.add_subplot(gs[1], projection=ccrs.PlateCarree())
+
+# Calculate averaged decorrelation time across the 3 models
+# ASUMIENDO que tienes arrays 2D: tau_d_eth, tau_d_cnrm, tau_d_cmcc
+# Si no los tienes, necesitas crearlos primero
+tau_dec_averaged = (tau_dec_eth + tau_dec_cnrm + tau_dec_cmcc) / 3
+
+# Create mesh grid
 lon_mesh, lat_mesh = np.meshgrid(lon_array, lat_array)
-scatter            = ax2.scatter(lon_mesh.flatten(), lat_mesh.flatten(), marker='X', color='k', transform=ccrs.PlateCarree(), s=100,                   # Tamaño
-                     linewidths=2, edgecolors='k')
+scatter = ax2.scatter( lon_mesh.flatten(), lat_mesh.flatten(), c=tau_dec_averaged.flatten(), cmap='viridis', marker='o', s=100,                          # Tamaño
+         edgecolors='black', linewidths=0.5, transform=ccrs.PlateCarree(), vmin=tau_dec_averaged.min(), vmax=tau_dec_averaged.max())
 ax2.add_feature(cfeature.BORDERS, linestyle=":", edgecolor="black", linewidth=0.8)
 ax2.add_feature(cfeature.COASTLINE, linewidth=1.0, edgecolor="black")
 gl = ax2.gridlines(draw_labels=True, alpha=0.3, linestyle="--")
-gl.left_labels  = False
-gl.top_labels   = False
-gl.right_labels = True
+gl.left_labels   = False
+gl.top_labels    = False
+gl.right_labels  = True
 gl.bottom_labels = True
 y_ticks_ax1 = ax1.get_yticks()
 gl.ylocator = ticker.FixedLocator(y_ticks_ax1)
 gl.xlocator = MaxNLocator(nbins=8)
 gl.xlabel_style = {'size': 11}
 gl.ylabel_style = {'size': 11}
-ax2.set_title("b) Spatial distribution of decorrelation time", fontsize=14, fontweight="bold")
-ax2.set_extent([lon_array.min(), lon_array.max(), lat_array.min(), lat_array.max()],  crs=ccrs.PlateCarree())
-
-
+ax2.set_title("b) Spatial distribution of sample points with decorrelation time", fontsize=14, fontweight="bold")
+ax2.set_extent([lon_array.min(), lon_array.max(), lat_array.min(), lat_array.max()], crs=ccrs.PlateCarree())
 cbar = plt.colorbar(scatter, ax=ax2, orientation="vertical", shrink=0.8, pad=0.06, aspect=30)
-cbar.set_label("Decorrelation [h]", fontsize=13)
+cbar.set_label("Multi-Model Mean Decorrelation Time [h]", fontsize=13) 
 cbar.ax.tick_params(labelsize=12)
 
 # Asegurar igualdad de alturas

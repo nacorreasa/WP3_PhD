@@ -43,7 +43,6 @@ bd_out_tc  = STORAGE + "/Outputs/WP3_SamplingSeries_CPM/"
 filas_eliminar    = [0]  # Primera  fila, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada 
 columnas_eliminar = [0]  # Primera columna, para ajuste de CNRM en todos los 2D array o xarrays con datos de entrada
 
-
 ########################################################################################
 ##------------------LOADING INPUT RASTERS AND EXPLORING DATA STRUCTURE----------------##
 ########################################################################################
@@ -363,9 +362,9 @@ for i, (idx, row) in enumerate(df_sorted.iterrows()):
     ax1.text(i, row['rel_freq'] * 3.9, category_label,ha='center', va='top', fontsize=10.5, rotation=90, color='black', fontweight='bold')
     
 # Legend using YOUR dataframes
-above_patch       = mpatches.Patch(color='#2E86AB', label=f'Above 25th percentile (n={len(df_filt)})')
-below_patch       = mpatches.Patch(color='#E63946', label=f'Below 25th percentile (n={len(df_cats)-len(df_filt)})')
-threshold_line    = mpatches.Patch(color='black', label=f'25th percentile threshold')
+above_patch       = mpatches.Patch(color='#2E86AB', label=f'Above Coverage-based threshold (n={len(df_filt)})')
+below_patch       = mpatches.Patch(color='#E63946', label=f'Below Coverage-based threshold (n={len(df_cats)-len(df_filt)})')
+threshold_line    = mpatches.Patch(color='black', label=f'Coverage-based threshold')
 ax1.legend(handles=[above_patch, below_patch, threshold_line], loc='upper right', fontsize=12)
 
 # Panel B: Filtering effectiveness 
@@ -388,7 +387,6 @@ for bar, count in zip(bars1, n_categories):
 
 for bar, freq in zip(bars2, cumulative_freq):
     ax2_twin.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 2, f'{freq:.1f}%', ha='center', va='bottom', fontweight='bold', fontsize=10)
-
 
 ax2.set_xlabel('Category sets', fontsize=12, fontweight='bold')
 ax2.set_ylabel('Number of categories', fontsize=12, fontweight='bold', color='#1f77b4')
@@ -439,9 +437,10 @@ ax3.grid(True, alpha=0.3, axis='x', linestyle='--')
 ax3.tick_params(which='both', direction='in')
 
 plt.tight_layout()
-# plt.savefig(bd_out_fig+'Stats_SpatCat_TotFilt.png', dpi=300, bbox_inches='tight', transparent=True)
+plt.savefig(bd_out_fig+'Stats_SpatCat_TotFilt.png', dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
+# %%
 ########################################################################################
 ##------------VISUALIZING DISTRIBUTION OF SPATIAL CATEGORIES WITH CDF LIKE------------##
 ########################################################################################
@@ -483,9 +482,9 @@ for i, (idx, row) in enumerate(df_sorted.iterrows()):
     ax1.text(i, row['rel_freq'] * 3.9, category_label,ha='center', va='top', fontsize=10.5, rotation=90, color='black', fontweight='bold')
     
 # Legend using YOUR dataframes
-above_patch       = mpatches.Patch(color='#2E86AB', label=f'Above 25th percentile (n={len(df_filt)})')
-below_patch       = mpatches.Patch(color='#E63946', label=f'Below 25th percentile (n={len(df_cats)-len(df_filt)})')
-threshold_line    = mpatches.Patch(color='black', label=f'25th percentile threshold')
+above_patch       = mpatches.Patch(color='#2E86AB', label=f'Above Coverage-based threshold (n={len(df_filt)})')
+below_patch       = mpatches.Patch(color='#E63946', label=f'Below Coverage-based threshold (n={len(df_cats)-len(df_filt)})')
+threshold_line    = mpatches.Patch(color='black', label=f'Coverage-based threshold')
 ax1.legend(handles=[above_patch, below_patch, threshold_line], loc='upper right', fontsize=12)
 
 # Panel B: Cumulative Distribution Function
@@ -568,3 +567,5 @@ print(f"Total spatial categories: {len(df_cats)}")
 print(f"Categories above 25th percentile: {len(df_filt)}")
 print(f"Area coverage by filtered categories: {df_filt['rel_freq'].sum():.1f}%")
 print(f"25th percentile threshold: {p25:.3f}%")
+
+# %%
